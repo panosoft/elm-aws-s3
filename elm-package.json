@@ -1,0 +1,19 @@
+{
+    "version": "1.0.0",
+    "summary": "Native bindings for Amazon's Simple Storage Service",
+    "repository": "https://github.com/panosoft/elm-aws-s3.git",
+    "license": "Unlicense",
+    "source-directories": [
+        "src",
+        "Test"
+    ],
+    "exposed-modules": [
+        "Aws.S3",
+        "Aws.S3.LowLevel"
+    ],
+    "native-modules": true,
+    "dependencies": {
+        "elm-lang/core": "5.1.1 <= v < 6.0.0"
+    },
+    "elm-version": "0.18.0 <= v < 0.19.0"
+}
