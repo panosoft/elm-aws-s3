@@ -3,23 +3,48 @@ module Aws.S3
         ( config
         , objectExists
         , objectProperties
+        , getObject
+        , putObject
+        , GetObjectResponse
+        , PutObjectResponse
+        , ObjectExistsResponse
         , ObjectPropertiesResponse
         )
 
 {-| AWS Simple Storage Service Api.
 
 # S3
-@docs config, objectExists, objectProperties, ObjectPropertiesResponse
+@docs config, getObject, putObject, objectExists, objectProperties, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse
 -}
 
-import Aws.S3.LowLevel as LowLevel exposing (Config, ObjectPropertiesResponse, objectExists, objectProperties)
+import Aws.S3.LowLevel as LowLevel exposing (Config, objectExists, objectProperties)
 import Task
+import Node.Buffer as Buffer exposing (..)
+import Utils.Ops exposing (..)
+
+
+{-| ObjectExistsResponse
+-}
+type alias ObjectExistsResponse =
+    LowLevel.ObjectExistsResponse
 
 
 {-| ObjectPropertiesResponse
 -}
 type alias ObjectPropertiesResponse =
     LowLevel.ObjectPropertiesResponse
+
+
+{-| GetObjectResponse
+-}
+type alias GetObjectResponse =
+    LowLevel.GetObjectResponse
+
+
+{-| PutObjectResponse
+-}
+type alias PutObjectResponse =
+    LowLevel.PutObjectResponse
 
 
 {-| Create a configuration for accessing S3.
@@ -30,10 +55,11 @@ config = S3.config
     "ACCESS_KEY_ID"
     "SECRET_ACCESS_KEY"
     serverSideEncryption
+    debug
 
 ```
 -}
-config : String -> String -> String -> Bool -> Config
+config : String -> String -> String -> Bool -> Bool -> Config
 config =
     Config
 
@@ -44,15 +70,15 @@ From [AWS Documentation]():
 
 ```
 type Msg =
-    ObjectExistsComplete (Result String Bool)
+    ObjectExistsComplete (Result String ObjectExistsResponse)
 
-objectExists config "<bucket name>" "<objectName>" ObjectExistsComplete
+objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> (Result String Bool -> msg) -> Cmd msg
+objectExists : Config -> String -> String -> (Result String ObjectExistsResponse -> msg) -> Cmd msg
 objectExists config bucket key tagger =
-    LowLevel.objectExists config bucket key
-        |> Task.attempt tagger
+    log config bucket key "objectExists"
+        |> always (LowLevel.objectExists config bucket key |> Task.attempt tagger)
 
 
 {-| Get S3 object properties.
@@ -62,10 +88,58 @@ From [AWS Documentation]():
 ```
 type Msg = ObjectPropertiesComplete (Result String ObjectPropertiesResponse)
 
-objectProperties config "<bucket name>" "<objectName>" ObjectPropertiesComplete
+objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
 objectProperties : Config -> String -> String -> (Result String ObjectPropertiesResponse -> msg) -> Cmd msg
 objectProperties config bucket key tagger =
-    LowLevel.objectProperties config bucket key
-        |> Task.attempt tagger
+    log config bucket key "objectProperties"
+        |> always (LowLevel.objectProperties config bucket key |> Task.attempt tagger)
+
+
+{-| Get S3 object.
+
+From [AWS Documentation]():
+
+```
+type Msg = GetObjectComplete (Result String GetObjectResponse)
+
+getObject config "<bucket name>" "<object name>" GetObjectComplete
+```
+-}
+getObject : Config -> String -> String -> (Result String GetObjectResponse -> msg) -> Cmd msg
+getObject config bucket key tagger =
+    log config bucket key "getObject"
+        |> always (LowLevel.getObject config bucket key |> Task.attempt tagger)
+
+
+{-| Upload S3 object.
+
+From [AWS Documentation]():
+
+```
+type Msg = PutObjectComplete (Result String PutObjectResponse)
+
+putObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
+```
+-}
+putObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
+putObject config bucket key buffer tagger =
+    log config bucket key "putObject"
+        |> always
+            (LowLevel.objectExists config bucket key
+                |> Task.andThen
+                    (\response ->
+                        response.exists
+                            ? ( Task.fail
+                                    ("putObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
+                              , LowLevel.putObject config bucket key buffer
+                              )
+                    )
+                |> Task.attempt tagger
+            )
+
+
+log : Config -> String -> String -> String -> String
+log config bucket key operation =
+    config.debug ? ( (Debug.log "S3 --" ("Performing " ++ operation ++ " for Bucket: " ++ bucket ++ "  Key: " ++ key)), "" )

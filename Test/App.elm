@@ -4,6 +4,7 @@ port module App exposing (..)
 
 import Json.Decode
 import Aws.S3 as S3 exposing (..)
+import Utils.Ops exposing (..)
 
 
 port exitApp : Float -> Cmd msg
@@ -15,6 +16,7 @@ port externalStop : (() -> msg) -> Sub msg
 type alias Flags =
     { accessKeyId : String
     , secretAccessKey : String
+    , debug : String
     }
 
 
@@ -28,7 +30,9 @@ model =
 
 
 type Msg
-    = ObjectExistsComplete (Result String Bool)
+    = GetObjectComplete (Result String S3.GetObjectResponse)
+    | PutObjectComplete (Result String S3.PutObjectResponse)
+    | ObjectExistsComplete (Result String S3.ObjectExistsResponse)
     | ObjectPropertiesComplete (Result String S3.ObjectPropertiesResponse)
     | Exit ()
 
@@ -37,11 +41,11 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
         config =
-            S3.config "us-west-1" flags.accessKeyId flags.secretAccessKey True
+            S3.config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False ))
     in
         model
-            ! [ S3.objectExists config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectExistsComplete
-              , S3.objectProperties config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectPropertiesComplete
+            ! [ S3.objectExists config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectExistsComplete
+              , S3.objectProperties config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectPropertiesComplete
               ]
 
 
@@ -50,6 +54,34 @@ update msg model =
     case msg of
         Exit _ ->
             model ! [ exitApp 1 ]
+
+        GetObjectComplete (Err error) ->
+            let
+                message =
+                    Debug.log "GetObjectComplete Error" error
+            in
+                model ! []
+
+        GetObjectComplete (Ok data) ->
+            let
+                message =
+                    Debug.log "GetObjectComplete" data
+            in
+                model ! []
+
+        PutObjectComplete (Err error) ->
+            let
+                message =
+                    Debug.log "PutObjectComplete Error" error
+            in
+                model ! []
+
+        PutObjectComplete (Ok data) ->
+            let
+                message =
+                    Debug.log "PutObjectComplete" data
+            in
+                model ! []
 
         ObjectExistsComplete (Err error) ->
             let

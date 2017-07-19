@@ -11,7 +11,6 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 			region: config.region,
 			accessKeyId: config.accessKeyId,
 			secretAccessKey: config.secretAccessKey,
-            serverSideEncryption: config.serverSideEncryption,
 			sslEnabled: true,
 			computeChecksums: true
 		});
@@ -21,15 +20,33 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 		return s3.headObject({Bucket: bucket, Key: key}, cb);
 	};
 
+    const logRequest = (debug, operation, bucket, key, body) => {
+            debug
+                ? console.log('Native Request --' + operation + ' Bucket: ' + bucket + ' Key: ' + key
+                    + (body ? ' Body length: ' + body.length.toString() : ''))
+                : null;
+    };
+
+    const logResponse = (debug, operation, bucket, key, err, data) => {
+        debug
+            ? (err
+                ? console.log(('Native Error --' + operation + ' Bucket: ' + bucket + ' Key: ' + key), err)
+                : console.log('Native Response --' + operation + ' Bucket: ' + bucket + ' Key: ' + key + ' Response Properties: ' + Object.keys(data)
+                    + (data.Body ? ' Body length: ' + data.Body.length.toString() : ''))
+                )
+            : null;
+    };
+
     const objectExists = F3((config, bucket, key) =>
         nativeBinding(callback => {
-            console.log(config, bucket, key);
             try {
+                const operation = 'objectExists';
+                logRequest(config.debug, operation, bucket, key);
 				headObjectInternal(config, bucket, key, (err, data) => {
-                    console.log(err, data);
+                    logResponse(config.debug, operation, bucket, key, err, data);
 					callback(err
-						? (err.statusCode === 404 ? succeed(false) : fail(err.code))
-						: succeed(true)
+                        ? (err.statusCode === 404 || err.code === 'NotFound' ? succeed({bucket: bucket, key: key, exists: false) : fail(err.code))
+                        : succeed({bucket: bucket, key: key, exists: true}))
 					);
                 });
             }
@@ -41,13 +58,15 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
     const objectProperties = F3((config, bucket, key) =>
         nativeBinding(callback => {
             try {
+                const operation = 'objectProperties';
+                logRequest(config.debug, operation, bucket, key);
                 headObjectInternal(config, bucket, key, (err, data) => {
-                    console.log(err, data);
+                    logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                    	? fail(err.code)
-                    	: succeed({contentType: data.ContentType, contentLength: data.ContentLength,
+                        ? fail(err.code)
+                        : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: (data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing),
-                            serverSideEncryption: data.ServerSideEncryption})
+                            serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass})
                     );
                 });
             }
@@ -60,10 +79,15 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
         nativeBinding(callback => {
             try {
 				const s3 = createS3(config);
+                const operation = 'getObject';
+                logRequest(config.debug, operation, bucket, key);
 				s3.getObject({Bucket: bucket, Key: key}, (err, data) => {
+                    logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                    	? fail(err.message)
-                    	: succeed(data)
+                        ? fail(err.message)
+                        : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
+                            contentEncoding: (data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing),
+                            serverSideEncryption: data.ServerSideEncryption})
                     );
                 });
             }
@@ -76,6 +100,8 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
         nativeBinding(callback => {
             try {
 				const s3 = createS3(config);
+                const operation = 'putObject';
+                logRequest(config.debug, operation, bucket, key, body);
 				const params = {Bucket: bucket, Key: filename, Body: body};
 				const contentType = mime.lookup(filename);
      	       	if (contentType) {
@@ -86,9 +112,10 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 				}
 
             	s3.putObject(params, (err, data) => {
+                    logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                    	? fail(err.message)
-                    	: succeed(data)
+                        ? fail(err.message)
+                        : succeed({bucket: bucket, key: key, serverSideEncryption: data.ServerSideEncryption})
                     );
                 });
             }

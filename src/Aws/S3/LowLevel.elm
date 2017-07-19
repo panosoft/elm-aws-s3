@@ -1,9 +1,14 @@
 module Aws.S3.LowLevel
     exposing
         ( Config
+        , GetObjectResponse
+        , PutObjectResponse
+        , ObjectExistsResponse
         , ObjectPropertiesResponse
         , objectExists
         , objectProperties
+        , getObject
+        , putObject
         )
 
 {-| Low-level bindings to the [AWS Simple Storage Service]() client for javascript.
@@ -11,19 +16,55 @@ module Aws.S3.LowLevel
 These are useful in cases where you would like to chain tasks together and then produce a single command.
 
 # S3
-@docs Config, ObjectPropertiesResponse, objectExists, objectProperties
+@docs Config, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse, getObject, putObject, objectExists, objectProperties
 -}
 
 import Native.S3
 import Task exposing (Task)
+import Node.Buffer as Buffer exposing (..)
+
+
+{-| ObjectExistsResponse
+-}
+type alias ObjectExistsResponse =
+    { bucket : String
+    , key : String
+    , exists : Bool
+    }
 
 
 {-| ObjectPropertiesResponse
 -}
 type alias ObjectPropertiesResponse =
-    { contentType : String
+    { bucket : String
+    , key : String
+    , contentType : String
     , contentLength : Int
     , contentEncoding : Maybe String
+    , serverSideEncryption : String
+    , storageClass : String
+    }
+
+
+{-| GetObjectResponse
+-}
+type alias GetObjectResponse =
+    { bucket : String
+    , key : String
+    , body : Buffer
+    , contentType : String
+    , contentLength : Int
+    , contentEncoding : Maybe String
+    , serverSideEncryption : String
+    , storageClass : String
+    }
+
+
+{-| PutObjectResponse
+-}
+type alias PutObjectResponse =
+    { bucket : String
+    , key : String
     , serverSideEncryption : String
     }
 
@@ -36,25 +77,27 @@ From the [AWS SDK Documentation]() and [AWS S3 Documentation]():
 - `accessKeyId` - your AWS access key ID.
 - `secretAccessKey` - your AWS secret access key.
 - `serverSideEncryption` - true if Objects uploaded to S3 should be encrypted when stored, false if they should not be encrypted when stored.
+- `debug` - log debug information if true.
 -}
 type alias Config =
     { region : String
     , accessKeyId : String
     , secretAccessKey : String
     , serverSideEncryption : Bool
+    , debug : Bool
     }
 
 
 {-| A low level method for determining the existence of an S3 object.
 
 ```
-type Msg = ObjectExistsComplete (Result String Bool)
+type Msg = ObjectExistsComplete (Result String ObjectExistsResponse)
 
 
-objectExists config "<bucket name>" "<objectName" ObjectExistsComplete
+objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> Task String Bool
+objectExists : Config -> String -> String -> Task String ObjectExistsResponse
 objectExists =
     Native.S3.objectExists
 
@@ -64,9 +107,35 @@ objectExists =
 type Msg = ObjectPropertiesComplete (Result String ObjectPropertiesResponse)
 
 
-objectProperties config "<bucket name>" "<objectName" ObjectPropertiesComplete
+objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
 objectProperties : Config -> String -> String -> Task String ObjectPropertiesResponse
 objectProperties =
     Native.S3.objectProperties
+
+
+{-| A low level method for getting an S3 object.
+```
+type Msg = GetObjectComplete (Result String GetObjectResponse)
+
+
+getObject config "<bucket name>" "<object name>" GetObjectComplete
+```
+-}
+getObject : Config -> String -> String -> Task String GetObjectResponse
+getObject =
+    Native.S3.getObject
+
+
+{-| A low level method for uploading an S3 object.
+```
+type Msg = PutObjectComplete (Result String PutObjectResponse)
+
+
+putObject config "<bucket name>" "<object name>" "<object buffer>" PutObjectComplete
+```
+-}
+putObject : Config -> String -> String -> Buffer -> Task String PutObjectResponse
+putObject =
+    Native.S3.putObject

@@ -4,13 +4,19 @@
 // load Elm module
 const elm = require('./elm.js');
 
-// Get credentials
+// run with:
+//      node main.js <aws accessKeyId> <aws secretAccessKey> debug
+//          (debug parameter is optional.  if specified, debug logging will be enabled.)
+
+// Get command line arguments
 const accessKeyId = process.argv[2];
 const secretAccessKey = process.argv[3];
+const debug = process.argv[4] || '';
 
 const flags = {
     accessKeyId,
-    secretAccessKey
+    secretAccessKey,
+    debug
 };
 
 // get Elm ports
