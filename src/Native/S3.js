@@ -64,7 +64,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                     logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
                         ? fail(err.code)
-                        : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
+                        : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: (data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing),
                             serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass})
                     );
@@ -85,7 +85,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                     logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
                         ? fail(err.message)
-                        : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
+                        : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: (data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing),
                             serverSideEncryption: data.ServerSideEncryption})
                     );
