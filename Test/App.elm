@@ -1,6 +1,6 @@
 port module App exposing (..)
 
--- Needed otherwise Json.Decode is not included in compiled js
+--TODO Bug in 0.18 Elm compiler.  import is needed otherwise Json.Decode is not included in compiled js
 
 import Json.Decode
 import Aws.S3 as S3 exposing (..)
@@ -46,6 +46,8 @@ init flags =
         model
             ! [ S3.objectExists config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectExistsComplete
               , S3.objectProperties config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectPropertiesComplete
+              , S3.objectExists config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectExistsComplete
+              , S3.objectProperties config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectPropertiesComplete
               ]
 
 

@@ -4,7 +4,8 @@ module Aws.S3
         , objectExists
         , objectProperties
         , getObject
-        , putObject
+        , createObject
+        , createOrReplaceObject
         , GetObjectResponse
         , PutObjectResponse
         , ObjectExistsResponse
@@ -14,7 +15,7 @@ module Aws.S3
 {-| AWS Simple Storage Service Api.
 
 # S3
-@docs config, getObject, putObject, objectExists, objectProperties, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse
+@docs config, getObject, createObject, createOrReplaceObject, objectExists, objectProperties, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse
 -}
 
 import Aws.S3.LowLevel as LowLevel exposing (Config, objectExists, objectProperties)
@@ -113,31 +114,48 @@ getObject config bucket key tagger =
         |> always (LowLevel.getObject config bucket key |> Task.attempt tagger)
 
 
-{-| Upload S3 object.
+{-| Create S3 object.
 
 From [AWS Documentation]():
 
 ```
 type Msg = PutObjectComplete (Result String PutObjectResponse)
 
-putObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
+createObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
 ```
 -}
-putObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
-putObject config bucket key buffer tagger =
-    log config bucket key "putObject"
+createObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
+createObject config bucket key buffer tagger =
+    log config bucket key "createObject"
         |> always
             (LowLevel.objectExists config bucket key
                 |> Task.andThen
                     (\response ->
                         response.exists
                             ? ( Task.fail
-                                    ("putObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
+                                    ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
                               , LowLevel.putObject config bucket key buffer
                               )
                     )
                 |> Task.attempt tagger
             )
+
+
+{-| Create or Replace S3 object.
+
+From [AWS Documentation]():
+
+```
+type Msg = PutObjectComplete (Result String PutObjectResponse)
+
+createOrReplaceObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
+```
+-}
+createOrReplaceObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
+createOrReplaceObject config bucket key buffer tagger =
+    log config bucket key "createOrReplaceObject"
+        |> always (LowLevel.putObject config bucket key buffer)
+        |> Task.attempt tagger
 
 
 log : Config -> String -> String -> String -> String
