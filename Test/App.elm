@@ -5,7 +5,6 @@ port module App exposing (..)
 import Json.Decode
 import Task
 import Aws.S3 as S3 exposing (..)
-import Aws.S3.LowLevel as S3LowLevel exposing (..)
 import Utils.Ops exposing (..)
 import Node.Buffer as NodeBuffer exposing (Buffer)
 import Node.FileSystem as NodeFileSystem exposing (readFile)
@@ -27,23 +26,41 @@ type alias Flags =
 
 
 type alias Model =
-    { config : S3LowLevel.Config }
+    { config : Config
+    , maybeBuffer : Maybe Buffer
+    }
 
 
 type Msg
-    = GetObjectComplete (Result String S3.GetObjectResponse)
-    | PutObjectComplete (Result String S3.PutObjectResponse)
-    | ObjectExistsComplete (Result String S3.ObjectExistsResponse)
-    | ObjectPropertiesComplete (Result String S3.ObjectPropertiesResponse)
-    | ReadFileComplete String (Result String Buffer)
+    = GetObjectComplete (Result ErrorResponse S3.GetObjectResponse)
+    | CreateObjectComplete (Result ErrorResponse S3.PutObjectResponse)
+    | CreateOrReplaceObjectComplete (Result ErrorResponse S3.PutObjectResponse)
+    | ObjectExistsComplete (Result ErrorResponse S3.ObjectExistsResponse)
+    | ObjectPropertiesComplete (Result ErrorResponse S3.ObjectPropertiesResponse)
+    | InitComplete String (Result String Buffer)
     | Exit ()
+
+
+existingFileName : String
+existingFileName =
+    "testfiles/formFile.pdf"
+
+
+existingS3KeyName : String
+existingS3KeyName =
+    "testfiles/formFile.pdf"
+
+
+nonExistingS3KeyName : String
+nonExistingS3KeyName =
+    "testfiles/testfiles1.pdf"
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    S3.config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False ))
+    config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False ))
         |> (\config ->
-                ({ config = config } ! [ readFileCmd "testfiles/testfile1.txt" ])
+                ({ config = config, maybeBuffer = Nothing } ! [ readFileCmd existingFileName ])
            )
 
 
@@ -51,7 +68,7 @@ readFileCmd : String -> Cmd Msg
 readFileCmd filename =
     NodeFileSystem.readFile filename
         |> Task.mapError (\error -> NodeError.message error)
-        |> Task.attempt (ReadFileComplete filename)
+        |> Task.attempt (InitComplete filename)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -60,47 +77,37 @@ update msg model =
         Exit _ ->
             model ! [ exitApp 1 ]
 
-        GetObjectComplete (Err error) ->
+        InitComplete filename (Err error) ->
             let
-                message =
-                    Debug.log "GetObjectComplete Error" error
+                l =
+                    Debug.log "InitComplete Error" ( filename, error )
             in
-                model ! []
+                model ! [ exitApp 1 ]
 
-        GetObjectComplete (Ok data) ->
-            NodeBuffer.toString NodeEncoding.Utf8 data.body
-                |??>
-                    (\str ->
-                        Debug.log "GetObjectComplete" ("Buffer: " ++ (String.left 80 str) ++ "  Buffer Length: " ++ (toString <| String.length str))
-                    )
-                ??= (\error -> Debug.log "GetObjectComplete Error" NodeError.message error)
-                |> always (model ! [])
-
-        PutObjectComplete (Err error) ->
+        InitComplete filename (Ok buffer) ->
             let
-                message =
-                    Debug.log "PutObjectComplete Error" error
+                l =
+                    Debug.log "InitComplete" filename
             in
-                model ! []
-
-        PutObjectComplete (Ok data) ->
-            let
-                message =
-                    Debug.log "PutObjectComplete" data
-            in
-                model ! []
+                ({ model | maybeBuffer = Just buffer }
+                    ! [ createRequest model ObjectExists "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing
+                      , createRequest model ObjectExists "s3proxytest.panosoft.com" existingS3KeyName Nothing
+                      , createRequest model ObjectProperties "s3proxytest.panosoft.com" existingS3KeyName Nothing
+                      , createRequest model GetObject "s3proxytest.panosoft.com" existingS3KeyName Nothing
+                      ]
+                )
 
         ObjectExistsComplete (Err error) ->
             let
                 message =
                     Debug.log "ObjectExistsComplete Error" error
             in
-                model ! []
+                model ! [ createRequest model ObjectProperties "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing ]
 
-        ObjectExistsComplete (Ok exists) ->
+        ObjectExistsComplete (Ok response) ->
             let
                 message =
-                    Debug.log "ObjectExistsComplete" exists
+                    Debug.log "ObjectExistsComplete" response
             in
                 model ! []
 
@@ -109,35 +116,62 @@ update msg model =
                 message =
                     Debug.log "ObjectPropertiesComplete Error" error
             in
-                model ! []
+                model ! [ createRequest model GetObject "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing ]
 
-        ObjectPropertiesComplete (Ok properties) ->
+        ObjectPropertiesComplete (Ok response) ->
             let
                 message =
-                    Debug.log "ObjectPropertiesComplete" properties
+                    Debug.log "ObjectPropertiesComplete" response
             in
                 model ! []
 
-        ReadFileComplete filename (Err error) ->
+        GetObjectComplete (Err error) ->
             let
-                l =
-                    Debug.log "ReadFileComplete Error" ( filename, error )
+                message =
+                    Debug.log "GetObjectComplete Error" error
             in
-                model ! [ exitApp 1 ]
+                model ! [ createRequest model CreateObject "s3proxytest.panosoft.com" existingS3KeyName model.maybeBuffer ]
 
-        ReadFileComplete filename (Ok buffer) ->
+        GetObjectComplete (Ok response) ->
+            NodeBuffer.toString NodeEncoding.Utf8 response.body
+                |??>
+                    (\str ->
+                        Debug.log "GetObjectComplete"
+                            ( response.bucket
+                            , response.key
+                            , ("Buffer: " ++ (String.left 80 str) ++ "  Buffer Length: " ++ (toString <| String.length str))
+                            )
+                    )
+                ??= (\error -> Debug.log "GetObjectComplete Error" ( response.bucket, response.key, NodeError.message error ))
+                |> always (model ! [])
+
+        CreateObjectComplete (Err error) ->
             let
-                l =
-                    Debug.log "ReadFileComplete" filename
+                message =
+                    Debug.log "CreateObjectComplete Error" error
             in
-                model
-                    ! [ S3.objectExists model.config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectExistsComplete
-                      , S3.objectProperties model.config "s3proxytest.panosoft.com" "testfiles/testfile.txt" ObjectPropertiesComplete
-                      , S3.objectExists model.config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectExistsComplete
-                      , S3.objectProperties model.config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" ObjectPropertiesComplete
-                      , S3.getObject model.config "s3proxytest.panosoft.com" "testfiles/formFile.pdf" GetObjectComplete
-                      , S3.createObject model.config "s3proxytest.panosoft.com" filename buffer PutObjectComplete
-                      ]
+                model ! [ createRequest model CreateObject "s3proxytest.panosoft.com" nonExistingS3KeyName model.maybeBuffer ]
+
+        CreateObjectComplete (Ok response) ->
+            let
+                message =
+                    Debug.log "CreateObjectComplete" response
+            in
+                model ! [ createRequest model CreateOrReplaceObject "s3proxytest.panosoft.com" existingS3KeyName model.maybeBuffer ]
+
+        CreateOrReplaceObjectComplete (Err error) ->
+            let
+                message =
+                    Debug.log "CreateOrReplaceObjectComplete Error" error
+            in
+                model ! []
+
+        CreateOrReplaceObjectComplete (Ok response) ->
+            let
+                message =
+                    Debug.log "CreateOrReplaceObjectComplete" response
+            in
+                model ! []
 
 
 main : Program Flags Model Msg
@@ -152,3 +186,34 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     externalStop Exit
+
+
+type Request
+    = ObjectExists
+    | ObjectProperties
+    | GetObject
+    | CreateObject
+    | CreateOrReplaceObject
+
+
+createRequest : Model -> Request -> String -> String -> Maybe Buffer -> Cmd Msg
+createRequest model requestType bucket key maybeBuffer =
+    case requestType of
+        ObjectExists ->
+            S3.objectExists model.config bucket key ObjectExistsComplete
+
+        ObjectProperties ->
+            S3.objectProperties model.config bucket key ObjectPropertiesComplete
+
+        GetObject ->
+            S3.getObject model.config bucket key GetObjectComplete
+
+        CreateObject ->
+            maybeBuffer
+                |?> (\buffer -> S3.createObject model.config bucket key buffer CreateObjectComplete)
+                ?= Debug.crash "createObject buffer is Nothing"
+
+        CreateOrReplaceObject ->
+            maybeBuffer
+                |?> (\buffer -> S3.createOrReplaceObject model.config bucket key buffer CreateOrReplaceObjectComplete)
+                ?= Debug.crash "createOrReplaceObject buffer is Nothing"
