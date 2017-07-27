@@ -37,6 +37,15 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             : null;
     };
 
+    const createErrorResponse = err => {
+        { message: err.message
+        , code: err.code ? _elm_lang$core$Maybe$Just(err.code) :_elm_lang$core$Maybe$Nothing
+        , retryable: err.retryable ? _elm_lang$core$Maybe$Just(err.retryable) :_elm_lang$core$Maybe$Nothing
+        , statusCode: err.statusCode ? _elm_lang$core$Maybe$Just(err.statusCode)) :_elm_lang$core$Maybe$Nothing
+        , region: err.region ? _elm_lang$core$Maybe$Just(err.region)) :_elm_lang$core$Maybe$Nothing
+        }
+    };
+
     const objectExists = F3((config, bucket, key) =>
         nativeBinding(callback => {
             try {
@@ -45,13 +54,13 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 				headObjectInternal(config, bucket, key, (err, data) => {
                     logResponse(config.debug, operation, bucket, key, err, data);
 					callback(err
-                        ? (err.statusCode === 404 || err.code === 'NotFound' ? succeed({bucket: bucket, key: key, exists: false}) : fail(err.code))
+                        ? (err.statusCode === 404 || err.code === 'NotFound' ? succeed({bucket: bucket, key: key, exists: false}) : fail(createErrorResponse(err)))
                         : succeed({bucket: bucket, key: key, exists: true}));
                 });
             }
             catch (error) {
-            	callback(fail(error.message));
-        	 }
+                callback(fail(createErrorResponse(error)));
+            }
         }));
 
     const objectProperties = F3((config, bucket, key) =>
@@ -62,15 +71,15 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                 headObjectInternal(config, bucket, key, (err, data) => {
                     logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                        ? fail(err.code)
+                        ? fail(createErrorResponse(err))
                         : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing,
                             serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass ? data.StorageClass : 'STANDARD'}));
                 });
             }
             catch (error) {
-            	callback(fail(error.message));
-        	 }
+                callback(fail(createErrorResponse(error)));
+            }
         }));
 
     const getObject = F3((config, bucket, key) =>
@@ -82,7 +91,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 				s3.getObject({Bucket: bucket, Key: key}, (err, data) => {
                     logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                        ? fail(err.message)
+                        ? fail(createErrorResponse(err))
                         : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: data.ContentEncoding ? _elm_lang$core$Maybe$Just(data.ContentEncoding) : _elm_lang$core$Maybe$Nothing,
                             serverSideEncryption: data.ServerSideEncryption})
@@ -90,8 +99,8 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                 });
             }
             catch (error) {
-            	callback(fail(error.message));
-        	 }
+                callback(fail(createErrorResponse(error)));
+            }
         }));
 
     const putObject = F4((config, bucket, key, body) =>
@@ -112,14 +121,14 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             	s3.putObject(params, (err, data) => {
                     logResponse(config.debug, operation, bucket, key, err, data);
                     callback(err
-                        ? fail(err.message)
+                        ? fail(createErrorResponse(err))
                         : succeed({bucket: bucket, key: key, serverSideEncryption: data.ServerSideEncryption})
                     );
                 });
             }
             catch (error) {
-            	callback(fail(error.message));
-        	 }
+                callback(fail(createErrorResponse(error)));
+            }
         }));
 
     return { objectExists, objectProperties, getObject, putObject };

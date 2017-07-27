@@ -1,6 +1,7 @@
 module Aws.S3.LowLevel
     exposing
         ( Config
+        , ErrorResponse
         , GetObjectResponse
         , PutObjectResponse
         , ObjectExistsResponse
@@ -16,12 +17,25 @@ module Aws.S3.LowLevel
 These are useful in cases where you would like to chain tasks together and then produce a single command.
 
 # S3
-@docs Config, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse, getObject, putObject, objectExists, objectProperties
+@docs Config, ErrorResponse, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse, getObject, putObject, objectExists, objectProperties
 -}
 
 import Native.S3
 import Task exposing (Task)
 import Node.Buffer as Buffer exposing (..)
+
+
+{-| ErrorResponse
+-}
+type alias ErrorResponse =
+    { bucket : String
+    , key : String
+    , message : String
+    , code : Maybe String
+    , retryable : Maybe Bool
+    , statusCode : Maybe Int
+    , region : Maybe String
+    }
 
 
 {-| ObjectExistsResponse
@@ -91,51 +105,51 @@ type alias Config =
 {-| A low level method for determining the existence of an S3 object.
 
 ```
-type Msg = ObjectExistsComplete (Result String ObjectExistsResponse)
+type Msg = ObjectExistsComplete (Result ErrorResponse ObjectExistsResponse)
 
 
 objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> Task String ObjectExistsResponse
+objectExists : Config -> String -> String -> Task ErrorResponse ObjectExistsResponse
 objectExists =
     Native.S3.objectExists
 
 
 {-| A low level method for determining the existence of an S3 object.
 ```
-type Msg = ObjectPropertiesComplete (Result String ObjectPropertiesResponse)
+type Msg = ObjectPropertiesComplete (Result ErrorResponse ObjectPropertiesResponse)
 
 
 objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
-objectProperties : Config -> String -> String -> Task String ObjectPropertiesResponse
+objectProperties : Config -> String -> String -> Task ErrorResponse ObjectPropertiesResponse
 objectProperties =
     Native.S3.objectProperties
 
 
 {-| A low level method for getting an S3 object.
 ```
-type Msg = GetObjectComplete (Result String GetObjectResponse)
+type Msg = GetObjectComplete (Result ErrorResponse GetObjectResponse)
 
 
 getObject config "<bucket name>" "<object name>" GetObjectComplete
 ```
 -}
-getObject : Config -> String -> String -> Task String GetObjectResponse
+getObject : Config -> String -> String -> Task ErrorResponse GetObjectResponse
 getObject =
     Native.S3.getObject
 
 
 {-| A low level method for uploading an S3 object.
 ```
-type Msg = PutObjectComplete (Result String PutObjectResponse)
+type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
 
 putObject config "<bucket name>" "<object name>" "<object buffer>" PutObjectComplete
 ```
 -}
-putObject : Config -> String -> String -> Buffer -> Task String PutObjectResponse
+putObject : Config -> String -> String -> Buffer -> Task ErrorResponse PutObjectResponse
 putObject =
     Native.S3.putObject

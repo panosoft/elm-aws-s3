@@ -6,6 +6,8 @@ module Aws.S3
         , getObject
         , createObject
         , createOrReplaceObject
+        , Config
+        , ErrorResponse
         , GetObjectResponse
         , PutObjectResponse
         , ObjectExistsResponse
@@ -15,13 +17,19 @@ module Aws.S3
 {-| AWS Simple Storage Service Api.
 
 # S3
-@docs config, getObject, createObject, createOrReplaceObject, objectExists, objectProperties, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse
+@docs config, getObject, createObject, createOrReplaceObject, objectExists, objectProperties, Config, ErrorResponse, GetObjectResponse, PutObjectResponse, ObjectExistsResponse, ObjectPropertiesResponse
 -}
 
 import Aws.S3.LowLevel as LowLevel exposing (Config, objectExists, objectProperties)
 import Task
 import Node.Buffer as Buffer exposing (..)
 import Utils.Ops exposing (..)
+
+
+{-| ErrorResponse
+-}
+type alias ErrorResponse =
+    LowLevel.ErrorResponse
 
 
 {-| ObjectExistsResponse
@@ -65,18 +73,24 @@ config =
     Config
 
 
+{-| alias for LowLevel.Config.
+-}
+type alias Config =
+    LowLevel.Config
+
+
 {-| Test for S3 object existence.
 
 From [AWS Documentation]():
 
 ```
 type Msg =
-    ObjectExistsComplete (Result String ObjectExistsResponse)
+    ObjectExistsComplete (Result ErrorResponse ObjectExistsResponse)
 
 objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> (Result String ObjectExistsResponse -> msg) -> Cmd msg
+objectExists : Config -> String -> String -> (Result ErrorResponse ObjectExistsResponse -> msg) -> Cmd msg
 objectExists config bucket key tagger =
     log config bucket key "objectExists"
         |> always (LowLevel.objectExists config bucket key |> Task.attempt tagger)
@@ -87,12 +101,12 @@ objectExists config bucket key tagger =
 From [AWS Documentation]():
 
 ```
-type Msg = ObjectPropertiesComplete (Result String ObjectPropertiesResponse)
+type Msg = ObjectPropertiesComplete (Result ErrorResponse ObjectPropertiesResponse)
 
 objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
-objectProperties : Config -> String -> String -> (Result String ObjectPropertiesResponse -> msg) -> Cmd msg
+objectProperties : Config -> String -> String -> (Result ErrorResponse ObjectPropertiesResponse -> msg) -> Cmd msg
 objectProperties config bucket key tagger =
     log config bucket key "objectProperties"
         |> always (LowLevel.objectProperties config bucket key |> Task.attempt tagger)
@@ -103,12 +117,12 @@ objectProperties config bucket key tagger =
 From [AWS Documentation]():
 
 ```
-type Msg = GetObjectComplete (Result String GetObjectResponse)
+type Msg = GetObjectComplete (Result ErrorResponse GetObjectResponse)
 
 getObject config "<bucket name>" "<object name>" GetObjectComplete
 ```
 -}
-getObject : Config -> String -> String -> (Result String GetObjectResponse -> msg) -> Cmd msg
+getObject : Config -> String -> String -> (Result ErrorResponse GetObjectResponse -> msg) -> Cmd msg
 getObject config bucket key tagger =
     log config bucket key "getObject"
         |> always (LowLevel.getObject config bucket key |> Task.attempt tagger)
@@ -119,12 +133,12 @@ getObject config bucket key tagger =
 From [AWS Documentation]():
 
 ```
-type Msg = PutObjectComplete (Result String PutObjectResponse)
+type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
 createObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
 ```
 -}
-createObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
+createObject : Config -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
 createObject config bucket key buffer tagger =
     log config bucket key "createObject"
         |> always
@@ -133,7 +147,14 @@ createObject config bucket key buffer tagger =
                     (\response ->
                         response.exists
                             ? ( Task.fail
-                                    ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
+                                    { bucket = bucket
+                                    , key = key
+                                    , message = ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
+                                    , code = Nothing
+                                    , retryable = Nothing
+                                    , statusCode = Nothing
+                                    , region = Nothing
+                                    }
                               , LowLevel.putObject config bucket key buffer
                               )
                     )
@@ -146,12 +167,12 @@ createObject config bucket key buffer tagger =
 From [AWS Documentation]():
 
 ```
-type Msg = PutObjectComplete (Result String PutObjectResponse)
+type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
 createOrReplaceObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
 ```
 -}
-createOrReplaceObject : Config -> String -> String -> Buffer -> (Result String PutObjectResponse -> msg) -> Cmd msg
+createOrReplaceObject : Config -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
 createOrReplaceObject config bucket key buffer tagger =
     log config bucket key "createOrReplaceObject"
         |> always (LowLevel.putObject config bucket key buffer)
