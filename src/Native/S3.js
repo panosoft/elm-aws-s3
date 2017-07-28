@@ -37,14 +37,14 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             : null;
     };
 
-    const createErrorResponse = err => {
-        { message: err.message
-        , code: err.code ? _elm_lang$core$Maybe$Just(err.code) :_elm_lang$core$Maybe$Nothing
-        , retryable: err.retryable ? _elm_lang$core$Maybe$Just(err.retryable) :_elm_lang$core$Maybe$Nothing
-        , statusCode: err.statusCode ? _elm_lang$core$Maybe$Just(err.statusCode)) :_elm_lang$core$Maybe$Nothing
-        , region: err.region ? _elm_lang$core$Maybe$Just(err.region)) :_elm_lang$core$Maybe$Nothing
-        }
-    };
+    const createErrorResponse = err =>
+        ({
+            message: err.message,
+            code: err.code ? _elm_lang$core$Maybe$Just(err.code) : _elm_lang$core$Maybe$Nothing,
+            retryable: err.retryable ? _elm_lang$core$Maybe$Just(err.retryable) : _elm_lang$core$Maybe$Nothing,
+            statusCode: err.statusCode ? _elm_lang$core$Maybe$Just(err.statusCode) : _elm_lang$core$Maybe$Nothing,
+            region: err.region ? _elm_lang$core$Maybe$Just(err.region) : _elm_lang$core$Maybe$Nothing
+        });
 
     const objectExists = F3((config, bucket, key) =>
         nativeBinding(callback => {
