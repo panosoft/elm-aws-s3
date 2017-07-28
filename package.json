@@ -6,7 +6,10 @@
   "license": "Unlicense",
   "dependencies": {
     "aws-sdk": "^2.84.0",
-    "mime-types": "^2.1.15"
+    "mime-types": "^2.1.15",
+    "cpr": "^2.0.2",
+    "mkdirp": "^0.5.1",
+    "rimraf": "^2.6.1"
   },
   "devDependencies": {}
 }
