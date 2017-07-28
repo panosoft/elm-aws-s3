@@ -97,27 +97,30 @@ update msg model =
                 ll =
                     Debug.log "S3 Config" model.config
             in
-                ({ model | maybeBuffer = Just buffer }
-                    ! [ createRequest model ObjectExists s3BucketName nonExistingS3KeyName Nothing
-                      , createRequest model ObjectExists s3BucketName existingS3KeyName Nothing
-                      , createRequest model ObjectProperties s3BucketName existingS3KeyName Nothing
-                      , createRequest model GetObject s3BucketName existingS3KeyName Nothing
-                      ]
-                )
+                { model | maybeBuffer = Just buffer }
+                    |> (\model ->
+                            (model
+                                ! [ createRequest model ObjectExists s3BucketName nonExistingS3KeyName Nothing
+                                  , createRequest model ObjectExists s3BucketName existingS3KeyName Nothing
+                                  , createRequest model ObjectProperties s3BucketName existingS3KeyName Nothing
+                                  , createRequest model GetObject s3BucketName existingS3KeyName Nothing
+                                  ]
+                            )
+                       )
 
         ObjectExistsComplete (Err error) ->
             let
                 message =
                     Debug.log "ObjectExistsComplete Error" error
             in
-                model ! [ createRequest model ObjectProperties s3BucketName nonExistingS3KeyName Nothing ]
+                model ! []
 
         ObjectExistsComplete (Ok response) ->
             let
                 message =
                     Debug.log "ObjectExistsComplete" response
             in
-                model ! []
+                response.exists ? ( model ! [], model ! [ createRequest model ObjectProperties s3BucketName nonExistingS3KeyName Nothing ] )
 
         ObjectPropertiesComplete (Err error) ->
             let
@@ -165,7 +168,7 @@ update msg model =
                 message =
                     Debug.log "CreateObjectComplete" response
             in
-                model ! [ createRequest model CreateOrReplaceObject s3BucketName existingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateOrReplaceObject s3BucketName nonExistingS3KeyName model.maybeBuffer ]
 
         CreateOrReplaceObjectComplete (Err error) ->
             let
@@ -179,7 +182,7 @@ update msg model =
                 message =
                     Debug.log "CreateOrReplaceObjectComplete" response
             in
-                model ! []
+                model ! [ exitApp 1 ]
 
 
 main : Program Flags Model Msg
@@ -219,9 +222,9 @@ createRequest model requestType bucket key maybeBuffer =
         CreateObject ->
             maybeBuffer
                 |?> (\buffer -> S3.createObject model.config bucket key buffer CreateObjectComplete)
-                ?= Debug.crash "createObject buffer is Nothing"
+                ?!= (\_ -> Debug.crash "createObject buffer is Nothing")
 
         CreateOrReplaceObject ->
             maybeBuffer
                 |?> (\buffer -> S3.createOrReplaceObject model.config bucket key buffer CreateOrReplaceObjectComplete)
-                ?= Debug.crash "createOrReplaceObject buffer is Nothing"
+                ?!= (\_ -> Debug.crash "createOrReplaceObject buffer is Nothing")
