@@ -26,7 +26,7 @@ type alias Flags =
 
 
 type alias Model =
-    { config : Config
+    { config : S3.Config
     , maybeBuffer : Maybe Buffer
     }
 
@@ -39,6 +39,11 @@ type Msg
     | ObjectPropertiesComplete (Result ErrorResponse S3.ObjectPropertiesResponse)
     | InitComplete String (Result String Buffer)
     | Exit ()
+
+
+s3BucketName : String
+s3BucketName =
+    "s3proxytest.panosoft.com"
 
 
 existingFileName : String
@@ -88,12 +93,15 @@ update msg model =
             let
                 l =
                     Debug.log "InitComplete" filename
+
+                ll =
+                    Debug.log "S3 Config" model.config
             in
                 ({ model | maybeBuffer = Just buffer }
-                    ! [ createRequest model ObjectExists "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing
-                      , createRequest model ObjectExists "s3proxytest.panosoft.com" existingS3KeyName Nothing
-                      , createRequest model ObjectProperties "s3proxytest.panosoft.com" existingS3KeyName Nothing
-                      , createRequest model GetObject "s3proxytest.panosoft.com" existingS3KeyName Nothing
+                    ! [ createRequest model ObjectExists s3BucketName nonExistingS3KeyName Nothing
+                      , createRequest model ObjectExists s3BucketName existingS3KeyName Nothing
+                      , createRequest model ObjectProperties s3BucketName existingS3KeyName Nothing
+                      , createRequest model GetObject s3BucketName existingS3KeyName Nothing
                       ]
                 )
 
@@ -102,7 +110,7 @@ update msg model =
                 message =
                     Debug.log "ObjectExistsComplete Error" error
             in
-                model ! [ createRequest model ObjectProperties "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing ]
+                model ! [ createRequest model ObjectProperties s3BucketName nonExistingS3KeyName Nothing ]
 
         ObjectExistsComplete (Ok response) ->
             let
@@ -116,7 +124,7 @@ update msg model =
                 message =
                     Debug.log "ObjectPropertiesComplete Error" error
             in
-                model ! [ createRequest model GetObject "s3proxytest.panosoft.com" nonExistingS3KeyName Nothing ]
+                model ! [ createRequest model GetObject s3BucketName nonExistingS3KeyName Nothing ]
 
         ObjectPropertiesComplete (Ok response) ->
             let
@@ -130,7 +138,7 @@ update msg model =
                 message =
                     Debug.log "GetObjectComplete Error" error
             in
-                model ! [ createRequest model CreateObject "s3proxytest.panosoft.com" existingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateObject s3BucketName existingS3KeyName model.maybeBuffer ]
 
         GetObjectComplete (Ok response) ->
             NodeBuffer.toString NodeEncoding.Utf8 response.body
@@ -150,14 +158,14 @@ update msg model =
                 message =
                     Debug.log "CreateObjectComplete Error" error
             in
-                model ! [ createRequest model CreateObject "s3proxytest.panosoft.com" nonExistingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateObject s3BucketName nonExistingS3KeyName model.maybeBuffer ]
 
         CreateObjectComplete (Ok response) ->
             let
                 message =
                     Debug.log "CreateObjectComplete" response
             in
-                model ! [ createRequest model CreateOrReplaceObject "s3proxytest.panosoft.com" existingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateOrReplaceObject s3BucketName existingS3KeyName model.maybeBuffer ]
 
         CreateOrReplaceObjectComplete (Err error) ->
             let
