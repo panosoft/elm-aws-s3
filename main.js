@@ -12,11 +12,14 @@ const elm = require('./elm.js');
 const accessKeyId = process.argv[2];
 const secretAccessKey = process.argv[3];
 const debug = process.argv[4] || '';
+const dryrun = process.argv[5] || '';
 
 const flags = {
     accessKeyId,
     secretAccessKey,
-    debug
+    debug,
+    dryrun,
+    seed: Math.floor(Math.random()*0x0FFFFFFF)
 };
 
 // get Elm ports
