@@ -44,9 +44,9 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             bucket: bucket,
             key: key,
             message: err.message,
-            code: createMaybe(err.code)
-            retryable: createMaybe(err.retryable)
-            statusCode: createMaybe(err.statusCode)
+            code: createMaybe(err.code),
+            retryable: createMaybe(err.retryable),
+            statusCode: createMaybe(err.statusCode),
             region: createMaybe(err.region)
         });
 
