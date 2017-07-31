@@ -10,6 +10,9 @@ import Node.Buffer as NodeBuffer exposing (Buffer)
 import Node.FileSystem as NodeFileSystem exposing (readFile)
 import Node.Error as NodeError exposing (..)
 import Node.Encoding as NodeEncoding exposing (Encoding)
+import Uuid
+import Random.Pcg exposing (Seed, initialSeed, step)
+import Regex exposing (..)
 
 
 port exitApp : Float -> Cmd msg
@@ -22,12 +25,15 @@ type alias Flags =
     { accessKeyId : String
     , secretAccessKey : String
     , debug : String
+    , dryrun : String
+    , seed : Int
     }
 
 
 type alias Model =
     { config : S3.Config
     , maybeBuffer : Maybe Buffer
+    , nonExistingS3KeyName : String
     }
 
 
@@ -46,27 +52,86 @@ s3BucketName =
     "s3proxytest.panosoft.com"
 
 
+
+{-
+   The following three names (existingFileName, existingS3KeyName, and nonExistingS3KeyTemplate) should have the same extension (e. g. '.pdf').
+-}
+{- The name of a file that exists that will be read and whose contents will be used when creating a key  s3BucketName -}
+
+
+extension : String
+extension =
+    ".pdf"
+
+
 existingFileName : String
 existingFileName =
-    "testfiles/formFile.pdf"
+    "testfiles/formFile" ++ extension
+
+
+
+{- The name of an S3 key that exists in s3BucketName -}
 
 
 existingS3KeyName : String
 existingS3KeyName =
-    "testfiles/formFile.pdf"
+    "testfiles/formFile" ++ extension
 
 
-nonExistingS3KeyName : String
-nonExistingS3KeyName =
-    "testfiles/testfiles1.pdf"
+
+{- The templated name of an S3 key that will not exist in s3BucketName once {{UUID}} is replace with a unique UUID by the App.
+   Once the App runs successfully, the S3 key generated from the nonExistingS3KeyTemplate will exist in s3BucketName until it is deleted manually.
+-}
+
+
+nonExistingS3KeyTemplate : String
+nonExistingS3KeyTemplate =
+    "testfiles/testfiles1_{{UUID}}" ++ extension
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False ))
-        |> (\config ->
-                ({ config = config, maybeBuffer = Nothing } ! [ readFileCmd existingFileName ])
+    (flags.debug == "debug" || flags.debug == "")
+        ?! ( always "", (\_ -> Debug.crash ("Invalid optional third parameter (" ++ flags.debug ++ "): Must be 'debug' if specified.\n\n" ++ usage)) )
+        |> (\_ ->
+                ((flags.dryrun == "--dry-run" || flags.dryrun == "")
+                    ?! ( always "", (\_ -> Debug.crash ("Invalid optional fourth parameter (" ++ flags.dryrun ++ "): Must be '--dry-run' if specified.\n\n" ++ usage)) )
+                )
            )
+        |> (\_ ->
+                (step Uuid.uuidGenerator <| initialSeed flags.seed)
+                    |> (\( uuid, newSeed ) -> ( Uuid.toString uuid, newSeed ))
+                    |> (\( uuidStr, newSeed ) ->
+                            (replace All (regex <| escape "{{UUID}}") (\_ -> uuidStr) nonExistingS3KeyTemplate)
+                       )
+           )
+        |> (\nonExistingS3KeyName ->
+                (config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False )))
+                    |> (\s3Config ->
+                            ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName )
+                       )
+           )
+        |> (\( dryrun, s3Config, nonExistingS3KeyName ) ->
+                (dryrun
+                    ?! ( \_ ->
+                            ( Debug.log "Exiting App" "Reason: --dry-run specified"
+                            , Debug.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, existingS3KeyName = existingS3KeyName, nonExistingS3KeyName = nonExistingS3KeyName }
+                            , Debug.log "S3.Config" s3Config
+                            )
+                                |> always ()
+                       , always ()
+                       )
+                    |> always
+                        ({ config = s3Config, maybeBuffer = Nothing, nonExistingS3KeyName = nonExistingS3KeyName }
+                            ! [ dryrun ? ( exitApp 0, readFileCmd existingFileName ) ]
+                        )
+                )
+           )
+
+
+usage : String
+usage =
+    "Usage: 'node main.js <accessKeyId> <secretAccessKey> debug --dry-run' \n     'debug' and '--dry-run' are optional\n"
 
 
 readFileCmd : String -> Cmd Msg
@@ -85,28 +150,27 @@ update msg model =
         InitComplete filename (Err error) ->
             let
                 l =
-                    Debug.log "InitComplete Error" ( filename, error )
+                    Debug.log "InitComplete Error"
+                        { bucketName = s3BucketName, existingFileName = existingFileName, existingS3KeyName = existingS3KeyName, nonExistingS3KeyName = model.nonExistingS3KeyName, error = error }
             in
                 model ! [ exitApp 1 ]
 
         InitComplete filename (Ok buffer) ->
             let
                 l =
-                    Debug.log "InitComplete" filename
+                    Debug.log "InitComplete"
+                        { existingFileName = existingFileName, existingS3KeyName = existingS3KeyName, nonExistingS3KeyName = model.nonExistingS3KeyName }
 
                 ll =
                     Debug.log "S3 Config" model.config
             in
-                { model | maybeBuffer = Just buffer }
-                    |> (\model ->
-                            (model
-                                ! [ createRequest model ObjectExists s3BucketName nonExistingS3KeyName Nothing
-                                  , createRequest model ObjectExists s3BucketName existingS3KeyName Nothing
-                                  , createRequest model ObjectProperties s3BucketName existingS3KeyName Nothing
-                                  , createRequest model GetObject s3BucketName existingS3KeyName Nothing
-                                  ]
-                            )
-                       )
+                ({ model | maybeBuffer = Just buffer }
+                    ! [ createRequest model ObjectExists s3BucketName model.nonExistingS3KeyName Nothing
+                      , createRequest model ObjectExists s3BucketName existingS3KeyName Nothing
+                      , createRequest model ObjectProperties s3BucketName existingS3KeyName Nothing
+                      , createRequest model GetObject s3BucketName existingS3KeyName Nothing
+                      ]
+                )
 
         ObjectExistsComplete (Err error) ->
             let
@@ -120,14 +184,14 @@ update msg model =
                 message =
                     Debug.log "ObjectExistsComplete" response
             in
-                response.exists ? ( model ! [], model ! [ createRequest model ObjectProperties s3BucketName nonExistingS3KeyName Nothing ] )
+                response.exists ? ( model ! [], model ! [ createRequest model ObjectProperties s3BucketName model.nonExistingS3KeyName Nothing ] )
 
         ObjectPropertiesComplete (Err error) ->
             let
                 message =
                     Debug.log "ObjectPropertiesComplete Error" error
             in
-                model ! [ createRequest model GetObject s3BucketName nonExistingS3KeyName Nothing ]
+                model ! [ createRequest model GetObject s3BucketName model.nonExistingS3KeyName Nothing ]
 
         ObjectPropertiesComplete (Ok response) ->
             let
@@ -161,14 +225,14 @@ update msg model =
                 message =
                     Debug.log "CreateObjectComplete Error" error
             in
-                model ! [ createRequest model CreateObject s3BucketName nonExistingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateObject s3BucketName model.nonExistingS3KeyName model.maybeBuffer ]
 
         CreateObjectComplete (Ok response) ->
             let
                 message =
                     Debug.log "CreateObjectComplete" response
             in
-                model ! [ createRequest model CreateOrReplaceObject s3BucketName nonExistingS3KeyName model.maybeBuffer ]
+                model ! [ createRequest model CreateOrReplaceObject s3BucketName model.nonExistingS3KeyName model.maybeBuffer ]
 
         CreateOrReplaceObjectComplete (Err error) ->
             let
@@ -182,7 +246,7 @@ update msg model =
                 message =
                     Debug.log "CreateOrReplaceObjectComplete" response
             in
-                model ! [ exitApp 1 ]
+                model ! [ exitApp 0 ]
 
 
 main : Program Flags Model Msg
