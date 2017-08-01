@@ -30,7 +30,7 @@ import Node.Buffer as Buffer exposing (..)
 type alias ErrorResponse =
     { bucket : String
     , key : String
-    , message : String
+    , message : Maybe String
     , code : Maybe String
     , retryable : Maybe Bool
     , statusCode : Maybe Int

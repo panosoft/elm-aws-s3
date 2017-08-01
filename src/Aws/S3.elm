@@ -149,7 +149,7 @@ createObject config bucket key buffer tagger =
                             ? ( Task.fail
                                     { bucket = bucket
                                     , key = key
-                                    , message = ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
+                                    , message = Just ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
                                     , code = Nothing
                                     , retryable = Nothing
                                     , statusCode = Nothing
