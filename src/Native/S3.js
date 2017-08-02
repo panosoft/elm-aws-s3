@@ -101,7 +101,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                         : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: createMaybe(data.ContentEncoding),
                             lastModified: createMaybe(data.LastModified ? data.LastModified.toString() : data.LastModified),
-                            serverSideEncryption: data.ServerSideEncryption})
+                            serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass ? data.StorageClass : 'STANDARD'})
                     );
                 });
             }
