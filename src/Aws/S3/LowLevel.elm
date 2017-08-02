@@ -34,6 +34,7 @@ type alias ErrorResponse =
     , code : Maybe String
     , retryable : Maybe Bool
     , statusCode : Maybe Int
+    , time : Maybe String
     , region : Maybe String
     }
 
@@ -55,6 +56,7 @@ type alias ObjectPropertiesResponse =
     , contentType : String
     , contentLength : Int
     , contentEncoding : Maybe String
+    , lastModified : Maybe String
     , serverSideEncryption : String
     , storageClass : String
     }
@@ -69,6 +71,7 @@ type alias GetObjectResponse =
     , contentType : String
     , contentLength : Int
     , contentEncoding : Maybe String
+    , lastModified : Maybe String
     , serverSideEncryption : String
     , storageClass : String
     }
