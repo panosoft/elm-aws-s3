@@ -34,7 +34,10 @@ type alias Model =
     { s3Config : S3.Config
     , maybeBuffer : Maybe Buffer
     , nonExistingS3KeyName : String
+    , nonExistingS3KeyNameCopy : String
     , createdS3KeyName : Maybe String
+    , createdS3KeyNameCopy : Maybe String
+    , downloadedFileName : String
     }
 
 
@@ -49,6 +52,8 @@ type Msg
     | ObjectPropertiesExpectSucceed (Result ErrorResponse S3.ObjectPropertiesResponse)
     | CreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
     | FinalCreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
+    | GetObjectExpectSucceed (Result ErrorResponse S3.GetObjectResponse)
+    | WriteFileComplete String (Result String ())
     | TestsComplete (Result String String)
     | Exit ()
 
@@ -99,7 +104,7 @@ downloadedFilesPath =
 
 
 {-
-   An existing test file whose contents will be used during testing
+   An existing test file whose contents will be used during testing.  This file must exist in the 'testFilesPath' directory or test will not run.
 -}
 
 
@@ -117,34 +122,40 @@ init flags =
                     ?! ( always "", (\_ -> Debug.crash ("Invalid optional fourth parameter (" ++ flags.dryrun ++ "): Must be '--dry-run' if specified.\n\n" ++ usage)) )
                 )
            )
-        -- create a non-existing S3 key name that will be used in testing and created on S3 during the test.
-        -- once created, it will exist in the test bucket until deleted manually.
+        -- create two non-existing S3 key names that will be used in testing and created on S3 during the test.
+        -- once created, both keys will exist in the S3 test bucket until deleted manually.
+        -- also a filename will be created that will be used to write a file to the  file system from a buffer retrieved from S3 by a getObject command.
+        -- once this file is create in the file system, it will exist until manually deleted.
         |>
             (\_ ->
                 (step Uuid.uuidGenerator <| initialSeed flags.seed)
                     |> (\( uuid, newSeed ) -> ( Uuid.toString uuid, newSeed ))
                     |> (\( uuidStr, newSeed ) ->
-                            (replace All (regex <| escape "{{UUID}}") (\_ -> uuidStr) ("testfiles/testfile_{{UUID}}" ++ extension))
+                            (replace All (regex <| escape "{{UUID}}") (\_ -> uuidStr) ("/testfile_{{UUID}}")
+                                |> (\nonExistingS3KeyBaseName ->
+                                        ( testFilesPath ++ nonExistingS3KeyBaseName ++ extension, testFilesPath ++ nonExistingS3KeyBaseName ++ "_COPY" ++ extension, downloadedFilesPath ++ nonExistingS3KeyBaseName ++ extension )
+                                   )
+                            )
                        )
             )
-        |> (\nonExistingS3KeyName ->
+        |> (\( nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
                 (config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False )))
                     |> (\s3Config ->
-                            ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName )
+                            ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName )
                        )
            )
-        |> (\( dryrun, s3Config, nonExistingS3KeyName ) ->
+        |> (\( dryrun, s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
                 (dryrun
                     ?! ( \_ ->
                             ( Debug.log "Exiting App" "Reason: --dry-run specified"
-                            , Debug.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName }
+                            , Debug.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, downloadedFileName = downloadedFileName }
                             , Debug.log "S3.Config" s3Config
                             )
                                 |> always ()
                        , always ()
                        )
                     |> always
-                        ({ s3Config = s3Config, maybeBuffer = Nothing, nonExistingS3KeyName = nonExistingS3KeyName, createdS3KeyName = Nothing }
+                        ({ s3Config = s3Config, maybeBuffer = Nothing, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, createdS3KeyName = Nothing, createdS3KeyNameCopy = Nothing, downloadedFileName = downloadedFileName }
                             ! [ dryrun ? ( exitApp 0, readFileCmd existingFileName ) ]
                         )
                 )
@@ -165,187 +176,262 @@ readFileCmd filename =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Exit _ ->
-            model ! [ exitApp 1 ]
-
-        ReadFileComplete filename (Err error) ->
-            let
-                l =
-                    Debug.log "ReadFileComplete Error"
-                        { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, error = error }
-            in
-                update (TestsComplete <| Err error) model
-
-        ReadFileComplete filename (Ok buffer) ->
-            let
-                l =
-                    ( Debug.log "ReadFileComplete" ("Filename: " ++ filename)
-                    , Debug.log "S3 Config" model.s3Config
+    let
+        processFailError error success =
+            error.statusCode
+                |?> (\statusCode ->
+                        (statusCode == 404)
+                            ?! ( (\_ -> success)
+                               , (\_ -> update (TestsComplete <| Err "Unexpected error, error.statusCode should be 404") model)
+                               )
                     )
-            in
-                ({ model | maybeBuffer = Just buffer } ! [ createRequest model.s3Config (ObjectExists InitComplete) s3BucketName model.nonExistingS3KeyName Nothing ])
+                ?!= (\_ -> update (TestsComplete <| Err "Unexpected error, error.statusCode should be 404") model)
 
-        InitComplete (Err error) ->
-            let
-                l =
-                    Debug.log "InitComplete Error"
-                        { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, error = error }
-            in
-                update (TestsComplete <| Err <| toString error) model
-
-        InitComplete (Ok response) ->
-            let
-                l =
-                    Debug.log "InitComplete"
-                        { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, exists = response.exists }
-            in
-                response.exists
-                    ?! ( (\_ -> update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model)
-                       , (\_ -> model ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectFail) s3BucketName model.nonExistingS3KeyName Nothing ])
-                       )
-
-        ObjectPropertiesExpectFail (Err error) ->
-            let
-                message =
-                    Debug.log "ObjectPropertiesComplete Error" error
-            in
-                model ! [ createRequest model.s3Config (GetObject GetObjectExpectFail) s3BucketName model.nonExistingS3KeyName Nothing ]
-
-        ObjectPropertiesExpectFail (Ok response) ->
-            let
-                message =
-                    Debug.log "ObjectPropertiesComplete" response
-            in
-                update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model
-
-        GetObjectExpectFail (Err error) ->
-            let
-                message =
-                    Debug.log "GetObjectExpectFail Error" error
-            in
-                update (TestsComplete <| Ok "") model
-
-        -- model ! [ createRequest model.s3Config CreateObject s3BucketName model.nonExistingS3KeyName model.maybeBuffer ]
-        GetObjectExpectFail (Ok response) ->
-            update (TestsComplete <| Err ("GetObjectExpectFail " ++ model.nonExistingS3KeyName ++ " should not exist")) model
-
-        -- NodeBuffer.toString NodeEncoding.Utf8 response.body
-        --     |??>
-        --         (\str ->
-        --             Debug.log "GetObjectExpectFail" ( response.bucket, response.key, ("Buffer: " ++ (String.left 80 str) ++ "  Buffer Length: " ++ (toString <| String.length str)) )
-        --         )
-        --     ??= (\error -> Debug.log "GetObjectExpectFail Error" ( response.bucket, response.key, NodeError.message error ))
-        --     |> always (model ! [])
-        CreateObjectExpectSucceed (Err error) ->
-            let
-                message =
-                    Debug.log "CreateObjectExpectSucceed Error" error
-            in
-                model ! []
-
-        -- error.code
-        --     |?> (\code ->
-        --             (code == "NotFound")
-        --                 ?! ( (\_ -> model ! [ createRequest model.s3Config (CreateOrReplaceObject CreateOrReplaceObjectExpectSucceed) s3BucketName model.nonExistingS3KeyName model.maybeBuffer ])
-        --                    , (\_ -> update (TestsComplete <| Err ("Expecting error code of 'NotFound'.  Error " ++ toString error)) model)
-        --                    )
-        --         )
-        --     ?!= (\_ -> update (TestsComplete <| Err ("Expecting error code of 'NotFound'.  Error " ++ toString error)) model)
-        CreateObjectExpectSucceed (Ok response) ->
-            let
-                message =
-                    Debug.log "CreateObjectExpectSucceed" response
-            in
-                ({ model | createdS3KeyName = Just response.key }
-                    ! []
-                 -- ! [ createRequest model.s3Config (CreateObject CreateObjectExpectFail) s3BucketName response.key model.maybeBuffer ]
-                )
-
-        CreateObjectExpectFail (Err error) ->
-            let
-                message =
-                    Debug.log "CreateObjectExpectFail Error" error
-            in
-                model ! []
-
-        CreateObjectExpectFail (Ok response) ->
-            let
-                message =
-                    Debug.log "CreateObjectExpectFail" response
-            in
-                model ! []
-
-        ObjectExistsExpectSucceed (Err error) ->
-            let
-                message =
-                    Debug.log "ObjectExistsExpectSucceed Error" error
-            in
-                model ! []
-
-        ObjectExistsExpectSucceed (Ok response) ->
-            let
-                message =
-                    Debug.log "ObjectExistsExpectSucceed" response
-            in
-                response.exists ?! ( (\_ -> model ! []), (\_ -> model ! []) )
-
-        ObjectPropertiesExpectSucceed (Err error) ->
-            let
-                message =
-                    Debug.log "ObjectPropertiesExpectSucceed Error" error
-            in
-                model ! []
-
-        ObjectPropertiesExpectSucceed (Ok response) ->
-            let
-                message =
-                    Debug.log "ObjectPropertiesExpectSucceed" response
-            in
-                model ! []
-
-        CreateOrReplaceObjectExpectSucceed (Err error) ->
-            let
-                message =
-                    Debug.log "CreateOrReplaceObjectExpectSucceed Error" error
-            in
-                update (TestsComplete <| Err <| toString error) model
-
-        CreateOrReplaceObjectExpectSucceed (Ok response) ->
-            let
-                message =
-                    Debug.log "CreateOrReplaceObjectSucceed" response
-            in
-                model ! []
-
-        -- model ! [ createRequest model.s3Config (CreateOrReplaceObject FinalCreateOrReplaceObjectComplete) s3BucketName model.nonExistingS3KeyName model.maybeBuffer ]
-        FinalCreateOrReplaceObjectExpectSucceed (Err error) ->
-            let
-                message =
-                    Debug.log "FinalCreateOrReplaceObjectExpectSucceed Error" error
-            in
-                update (TestsComplete <| Err <| toString error) model
-
-        FinalCreateOrReplaceObjectExpectSucceed (Ok response) ->
-            let
-                message =
-                    Debug.log "FinalCreateOrReplaceObjectExpectSucceed" response
-            in
-                update (TestsComplete <| Ok "") model
-
-        TestsComplete (Err error) ->
-            let
-                message =
-                    Debug.log "TestsComplete Error" error
-            in
+        getCreatedS3Key maybeCreatedS3KeyName =
+            maybeCreatedS3KeyName
+                |?> identity
+                ?!= (\_ -> Debug.crash "BUG: model.createdS3KeyName should not be Nothing")
+    in
+        case msg of
+            Exit _ ->
                 model ! [ exitApp 1 ]
 
-        TestsComplete (Ok _) ->
-            let
-                message =
-                    Debug.log "TestsComplete" ""
-            in
-                model ! [ exitApp 0 ]
+            ReadFileComplete filename (Err error) ->
+                let
+                    l =
+                        Debug.log "ReadFileComplete Error"
+                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
+                in
+                    update (TestsComplete <| Err error) model
+
+            ReadFileComplete filename (Ok buffer) ->
+                let
+                    l =
+                        ( Debug.log "ReadFileComplete" ("Filename: " ++ filename)
+                        , Debug.log "S3 Config" model.s3Config
+                        )
+                in
+                    ({ model | maybeBuffer = Just buffer } ! [ createRequest model.s3Config (ObjectExists InitComplete) s3BucketName model.nonExistingS3KeyName Nothing ])
+
+            InitComplete (Err error) ->
+                let
+                    l =
+                        Debug.log "InitComplete Error"
+                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            InitComplete (Ok response) ->
+                let
+                    l =
+                        Debug.log "InitComplete"
+                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, exists = response.exists }
+                in
+                    response.exists
+                        ?! ( (\_ -> update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model)
+                           , (\_ -> model ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectFail) s3BucketName model.nonExistingS3KeyName Nothing ])
+                           )
+
+            ObjectPropertiesExpectFail (Err error) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesExpectFail Error" error
+                in
+                    processFailError error
+                        ( model, createRequest model.s3Config (GetObject GetObjectExpectFail) s3BucketName model.nonExistingS3KeyName Nothing )
+
+            ObjectPropertiesExpectFail (Ok response) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesExpectFail" response
+                in
+                    update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model
+
+            GetObjectExpectFail (Err error) ->
+                let
+                    message =
+                        Debug.log "GetObjectExpectFail Error" error
+                in
+                    processFailError error <|
+                        model
+                            ! [ createRequest model.s3Config (CreateObject CreateObjectExpectSucceed) s3BucketName model.nonExistingS3KeyName model.maybeBuffer ]
+
+            GetObjectExpectFail (Ok response) ->
+                let
+                    message =
+                        Debug.log "GetObjectExpectFail" response
+                in
+                    update (TestsComplete <| Err ("GetObjectExpectFail " ++ model.nonExistingS3KeyName ++ " should not exist")) model
+
+            CreateObjectExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "CreateObjectExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            CreateObjectExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "CreateObjectExpectSucceed" response
+                in
+                    ({ model | createdS3KeyName = Just response.key }
+                        ! [ createRequest model.s3Config (CreateObject CreateObjectExpectFail) s3BucketName response.key model.maybeBuffer ]
+                    )
+
+            CreateObjectExpectFail (Err error) ->
+                let
+                    message =
+                        Debug.log "CreateObjectExpectFail Error" error
+                in
+                    error.message
+                        |?> (\message ->
+                                (String.startsWith "createObject Overwrite Error:  Object exists (Bucket:") message
+                                    ?! (( (\_ ->
+                                            model
+                                                ! [ createRequest model.s3Config (ObjectExists ObjectExistsExpectSucceed) s3BucketName (getCreatedS3Key model.createdS3KeyName) Nothing ]
+                                          )
+                                        , (\_ -> update (TestsComplete <| Err <| toString error) model)
+                                        )
+                                       )
+                            )
+                        ?!= (\_ -> update (TestsComplete <| Err <| toString error) model)
+
+            CreateObjectExpectFail (Ok response) ->
+                let
+                    message =
+                        Debug.log "CreateObjectExpectFail" response
+                in
+                    update (TestsComplete <| Err ("CreateObjectExpectFail " ++ (getCreatedS3Key model.createdS3KeyName) ++ " should not exist")) model
+
+            ObjectExistsExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "ObjectExistsExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            ObjectExistsExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "ObjectExistsExpectSucceed" response
+                in
+                    response.exists
+                        ?! ( (\_ ->
+                                model
+                                    ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectSucceed) s3BucketName (getCreatedS3Key model.createdS3KeyName) Nothing ]
+                             )
+                           , (\_ -> update (TestsComplete <| Err (("ObjectExistsExpectSucceed " ++ getCreatedS3Key model.createdS3KeyName) ++ " should exist")) model)
+                           )
+
+            ObjectPropertiesExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            ObjectPropertiesExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesExpectSucceed" response
+                in
+                    model
+                        ! [ createRequest model.s3Config (CreateOrReplaceObject CreateOrReplaceObjectExpectSucceed) s3BucketName (getCreatedS3Key model.createdS3KeyName) model.maybeBuffer ]
+
+            CreateOrReplaceObjectExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "CreateOrReplaceObjectExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            CreateOrReplaceObjectExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "CreateOrReplaceObjectSucceed" response
+                in
+                    model
+                        ! [ createRequest model.s3Config (CreateOrReplaceObject FinalCreateOrReplaceObjectExpectSucceed) s3BucketName model.nonExistingS3KeyNameCopy model.maybeBuffer ]
+
+            FinalCreateOrReplaceObjectExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "FinalCreateOrReplaceObjectExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            FinalCreateOrReplaceObjectExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "FinalCreateOrReplaceObjectExpectSucceed" response
+                in
+                    ({ model | createdS3KeyNameCopy = Just response.key }
+                        ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3BucketName response.key Nothing ]
+                    )
+
+            GetObjectExpectSucceed (Err error) ->
+                let
+                    message =
+                        Debug.log "GetObjectExpectSucceed Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            GetObjectExpectSucceed (Ok response) ->
+                let
+                    message =
+                        Debug.log "GetObjectExpectSucceed"
+                            { bucket = response.bucket
+                            , key = response.key
+                            , contentType = response.contentType
+                            , contentLength = response.contentLength
+                            , contentEncoding = response.contentEncoding
+                            , lastModified = response.lastModified
+                            , serverSideEncryption = response.serverSideEncryption
+                            , storageClass = response.storageClass
+                            }
+                in
+                    NodeBuffer.toString NodeEncoding.Ascii response.body
+                        |??>
+                            (\str ->
+                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (ascii): " ++ (String.left 80 str) ++ "  Buffer Length: " ++ (toString <| String.length str)) )
+                                    |> (\_ ->
+                                            ( model
+                                            , NodeFileSystem.writeFile model.downloadedFileName response.body
+                                                |> Task.mapError (\error -> NodeError.message error)
+                                                |> Task.attempt (WriteFileComplete response.key)
+                                            )
+                                       )
+                            )
+                        ??= (\error -> update (TestsComplete <| Err <| NodeError.message error) model)
+
+            WriteFileComplete filename (Err error) ->
+                let
+                    l =
+                        Debug.log "WriteFileComplete Error" ( filename, error )
+                in
+                    update (TestsComplete <| Err error) model
+
+            WriteFileComplete filename (Ok buffer) ->
+                let
+                    l =
+                        Debug.log "WriteFileComplete" ("Filename: " ++ filename)
+                in
+                    update (TestsComplete <| Ok "") model
+
+            TestsComplete (Err error) ->
+                let
+                    message =
+                        Debug.log "Tests Completed with Error" error
+                in
+                    model ! [ exitApp 1 ]
+
+            TestsComplete (Ok _) ->
+                let
+                    ll =
+                        Debug.log "Tests Completed Successfully" ""
+                in
+                    model ! [ exitApp 0 ]
 
 
 main : Program Flags Model Msg
