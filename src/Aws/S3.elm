@@ -153,6 +153,7 @@ createObject config bucket key buffer tagger =
                                     , code = Nothing
                                     , retryable = Nothing
                                     , statusCode = Nothing
+                                    , time = Nothing
                                     , region = Nothing
                                     }
                               , LowLevel.putObject config bucket key buffer
@@ -181,4 +182,4 @@ createOrReplaceObject config bucket key buffer tagger =
 
 log : Config -> String -> String -> String -> String
 log config bucket key operation =
-    config.debug ? ( (Debug.log "S3 --" ("Performing " ++ operation ++ " for Bucket: " ++ bucket ++ "  Key: " ++ key)), "" )
+    config.debug ?! ( (\_ -> Debug.log "S3 --" ("Performing " ++ operation ++ " for Bucket: " ++ bucket ++ "  Key: " ++ key)), always "" )
