@@ -20,6 +20,12 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 		return s3.headObject({Bucket: bucket, Key: key}, cb);
 	};
 
+    const printableResponse = response => {
+        const pResponse = {};
+        Object.keys(response).filter(key =>  response.hasOwnProperty(key) && key != "Body").forEach(key => pResponse[key] = response[key]);
+        return pResponse;
+    };
+
     const logRequest = (debug, operation, bucket, key, body) => {
             debug
                 ? console.log('Native Request --' + operation + ' Bucket: ' + bucket + ' Key: ' + key
@@ -31,8 +37,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
         debug
             ? (err
                 ? console.log(('Native Error --' + operation + ' Bucket: ' + bucket + ' Key: ' + key), err)
-                : console.log('Native Response --' + operation + ' Bucket: ' + bucket + ' Key: ' + key + ' Response Properties: ' + Object.keys(data)
-                    + (data.Body ? ' Body length: ' + data.Body.length : ''))
+                : console.log(('Native Response --' + operation + ' Bucket: ' + bucket + ' Key: ' + key), printableResponse(data))
                 )
             : null;
     };
@@ -47,7 +52,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             code: createMaybe(err.code),
             retryable: createMaybe(err.retryable),
             statusCode: createMaybe(err.statusCode),
-            time: createMaybe(err.time ? err.time.toString() : err.time),
+            time: createMaybe(err.time ? err.time.toUTCString() : err.time),
             region: createMaybe(err.region)
         });
 
@@ -79,7 +84,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                         ? fail(createErrorResponse(bucket, key, err))
                         : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: createMaybe(data.ContentEncoding),
-                            lastModified: createMaybe(data.LastModified ? data.LastModified.toString() : data.LastModified),
+                            lastModified: createMaybe(data.LastModified ? data.LastModified.toUTCString() : data.LastModified),
                             serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass ? data.StorageClass : 'STANDARD'}));
                 });
             }
@@ -100,7 +105,7 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                         ? fail(createErrorResponse(bucket, key, err))
                         : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: createMaybe(data.ContentEncoding),
-                            lastModified: createMaybe(data.LastModified ? data.LastModified.toString() : data.LastModified),
+                            lastModified: createMaybe(data.LastModified ? data.LastModified.toUTCString() : data.LastModified),
                             serverSideEncryption: data.ServerSideEncryption, storageClass: data.StorageClass ? data.StorageClass : 'STANDARD'})
                     );
                 });
