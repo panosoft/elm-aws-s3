@@ -62,6 +62,17 @@ type Msg
 
 
 {-
+   S3 region name to be used in the tests
+-}
+
+
+s3regionName : String
+s3regionName =
+    "us-west-1"
+
+
+
+{-
    S3 bucket name to be used in the tests
 -}
 
@@ -142,7 +153,7 @@ init flags =
                        )
             )
         |> (\( nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
-                (config "us-west-1" flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False )))
+                (config s3regionName flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False )))
                     |> (\s3Config ->
                             ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName )
                        )
