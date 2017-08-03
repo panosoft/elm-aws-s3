@@ -422,7 +422,7 @@ update msg model =
                                             ( { model | createdS3KeyBuffer = Just response.body }
                                             , NodeFileSystem.writeFile model.downloadedFileName response.body
                                                 |> Task.mapError (\error -> NodeError.message error)
-                                                |> Task.attempt (WriteFileComplete response.key)
+                                                |> Task.attempt (WriteFileComplete model.downloadedFileName)
                                             )
                                        )
                             )
