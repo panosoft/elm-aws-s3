@@ -52,6 +52,7 @@ type Msg
     | ObjectPropertiesExpectSucceed (Result ErrorResponse S3.ObjectPropertiesResponse)
     | CreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
     | FinalCreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
+    | ObjectPropertiesCreatedKeyCopy (Result ErrorResponse S3.ObjectPropertiesResponse)
     | GetObjectExpectSucceed (Result ErrorResponse S3.GetObjectResponse)
     | WriteFileComplete String (Result String ())
     | TestsComplete (Result String String)
@@ -110,7 +111,7 @@ downloadedFilesPath =
 
 existingFileName : String
 existingFileName =
-    testFilesPath ++ "/formFile" ++ extension
+    testFilesPath ++ "/testfile" ++ extension
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -367,8 +368,22 @@ update msg model =
                         Debug.log "FinalCreateOrReplaceObjectExpectSucceed" response
                 in
                     ({ model | createdS3KeyNameCopy = Just response.key }
-                        ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3BucketName response.key Nothing ]
+                        ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesCreatedKeyCopy) s3BucketName response.key Nothing ]
                     )
+
+            ObjectPropertiesCreatedKeyCopy (Err error) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesCreatedKeyCopy Error" error
+                in
+                    update (TestsComplete <| Err <| toString error) model
+
+            ObjectPropertiesCreatedKeyCopy (Ok response) ->
+                let
+                    message =
+                        Debug.log "ObjectPropertiesCreatedKeyCopy" response
+                in
+                    model ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3BucketName (getCreatedS3Key model.createdS3KeyName) Nothing ]
 
             GetObjectExpectSucceed (Err error) ->
                 let
@@ -394,7 +409,7 @@ update msg model =
                     NodeBuffer.toString NodeEncoding.Ascii response.body
                         |??>
                             (\str ->
-                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (ascii): " ++ (String.left 80 str) ++ "  Buffer Length: " ++ (toString <| String.length str)) )
+                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (ascii up to 100 characters): " ++ (String.left 100 str) ++ "  Buffer Length: " ++ (toString <| String.length str)) )
                                     |> (\_ ->
                                             ( model
                                             , NodeFileSystem.writeFile model.downloadedFileName response.body
