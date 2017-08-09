@@ -57,6 +57,8 @@ type alias ObjectPropertiesResponse =
     , contentLength : Int
     , contentEncoding : Maybe String
     , lastModified : Maybe String
+    , deleteMarker : Maybe Bool
+    , versionId : Maybe String
     , serverSideEncryption : String
     , storageClass : String
     }
@@ -72,6 +74,8 @@ type alias GetObjectResponse =
     , contentLength : Int
     , contentEncoding : Maybe String
     , lastModified : Maybe String
+    , deleteMarker : Maybe Bool
+    , versionId : Maybe String
     , serverSideEncryption : String
     , storageClass : String
     }
@@ -82,6 +86,7 @@ type alias GetObjectResponse =
 type alias PutObjectResponse =
     { bucket : String
     , key : String
+    , versionId : Maybe String
     , serverSideEncryption : String
     }
 
