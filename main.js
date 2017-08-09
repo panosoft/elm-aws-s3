@@ -5,8 +5,11 @@
 const elm = require('./elm.js');
 
 // run with:
-//      node main.js <aws accessKeyId> <aws secretAccessKey> debug
-//          (debug parameter is optional.  if specified, debug logging will be enabled.)
+//      node main.js <aws accessKeyId> <aws secretAccessKey> --debug --dry-run
+//
+//           --debug and --dry-run parameters are optional.
+//           if --debug is specified, then debug logging will be enabled.
+//           if --dry-run is specified, then the program's configuration will be printed, and the program will exit without running the tests.
 
 // Get command line arguments
 const accessKeyId = process.argv[2];
