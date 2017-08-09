@@ -44,17 +44,17 @@ type alias Model =
 
 type Msg
     = ReadFileComplete String (Result String Buffer)
-    | InitComplete (Result ErrorResponse S3.ObjectExistsResponse)
-    | ObjectPropertiesExpectFail (Result ErrorResponse S3.ObjectPropertiesResponse)
-    | GetObjectExpectFail (Result ErrorResponse S3.GetObjectResponse)
-    | CreateObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
-    | CreateObjectExpectFail (Result ErrorResponse S3.PutObjectResponse)
-    | ObjectExistsExpectSucceed (Result ErrorResponse S3.ObjectExistsResponse)
-    | ObjectPropertiesExpectSucceed (Result ErrorResponse S3.ObjectPropertiesResponse)
-    | CreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
-    | FinalCreateOrReplaceObjectExpectSucceed (Result ErrorResponse S3.PutObjectResponse)
-    | ObjectPropertiesCopiedKeyExpectSucceed (Result ErrorResponse S3.ObjectPropertiesResponse)
-    | GetObjectExpectSucceed (Result ErrorResponse S3.GetObjectResponse)
+    | InitComplete (Result S3.ErrorResponse S3.ObjectExistsResponse)
+    | ObjectPropertiesExpectFail (Result S3.ErrorResponse S3.ObjectPropertiesResponse)
+    | GetObjectExpectFail (Result S3.ErrorResponse S3.GetObjectResponse)
+    | CreateObjectExpectSucceed (Result S3.ErrorResponse S3.PutObjectResponse)
+    | CreateObjectExpectFail (Result S3.ErrorResponse S3.PutObjectResponse)
+    | ObjectExistsExpectSucceed (Result S3.ErrorResponse S3.ObjectExistsResponse)
+    | ObjectPropertiesExpectSucceed (Result S3.ErrorResponse S3.ObjectPropertiesResponse)
+    | CreateOrReplaceObjectExpectSucceed (Result S3.ErrorResponse S3.PutObjectResponse)
+    | FinalCreateOrReplaceObjectExpectSucceed (Result S3.ErrorResponse S3.PutObjectResponse)
+    | ObjectPropertiesCopiedKeyExpectSucceed (Result S3.ErrorResponse S3.ObjectPropertiesResponse)
+    | GetObjectExpectSucceed (Result S3.ErrorResponse S3.GetObjectResponse)
     | WriteFileComplete String (Result String ())
     | TestsComplete (Result String String)
     | Exit ()
@@ -128,8 +128,8 @@ existingFileName =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    (flags.debug == "debug" || flags.debug == "")
-        ?! ( always "", (\_ -> Debug.crash ("Invalid optional third parameter (" ++ flags.debug ++ "): Must be 'debug' if specified.\n\n" ++ usage)) )
+    (flags.debug == "--debug" || flags.debug == "")
+        ?! ( always "", (\_ -> Debug.crash ("Invalid optional third parameter (" ++ flags.debug ++ "): Must be '--debug' if specified.\n\n" ++ usage)) )
         |> (\_ ->
                 ((flags.dryrun == "--dry-run" || flags.dryrun == "")
                     ?! ( always "", (\_ -> Debug.crash ("Invalid optional fourth parameter (" ++ flags.dryrun ++ "): Must be '--dry-run' if specified.\n\n" ++ usage)) )
@@ -153,7 +153,7 @@ init flags =
                        )
             )
         |> (\( nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
-                (config s3regionName flags.accessKeyId flags.secretAccessKey True ((flags.debug == "debug") ? ( True, False )))
+                (config s3regionName flags.accessKeyId flags.secretAccessKey True ((flags.debug == "--debug") ? ( True, False )))
                     |> (\s3Config ->
                             ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName )
                        )
@@ -178,7 +178,7 @@ init flags =
 
 usage : String
 usage =
-    "Usage: 'node main.js <accessKeyId> <secretAccessKey> debug --dry-run' \n     'debug' and '--dry-run' are optional\n"
+    "Usage: 'node main.js <accessKeyId> <secretAccessKey> --debug --dry-run' \n     '--debug' and '--dry-run' are optional\n"
 
 
 readFileCmd : String -> Cmd Msg
@@ -410,14 +410,16 @@ update msg model =
                             , contentLength = response.contentLength
                             , contentEncoding = response.contentEncoding
                             , lastModified = response.lastModified
+                            , deleteMarker = response.deleteMarker
+                            , versionId = response.versionId
                             , serverSideEncryption = response.serverSideEncryption
                             , storageClass = response.storageClass
                             }
                 in
-                    NodeBuffer.toString NodeEncoding.Ascii response.body
+                    NodeBuffer.toString NodeEncoding.Hex response.body
                         |??>
                             (\str ->
-                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (ascii up to 100 characters): " ++ (String.left 100 str) ++ "  Buffer Length: " ++ (toString <| String.length str)) )
+                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (up to 100 hex bytes): " ++ (String.left 100 str) ++ "  Buffer Length: " ++ (toString <| response.contentLength)) )
                                     |> (\_ ->
                                             ( { model | createdS3KeyBuffer = Just response.body }
                                             , NodeFileSystem.writeFile model.downloadedFileName response.body
@@ -474,11 +476,11 @@ subscriptions model =
 
 
 type Request
-    = ObjectExists (Result ErrorResponse ObjectExistsResponse -> Msg)
-    | ObjectProperties (Result ErrorResponse ObjectPropertiesResponse -> Msg)
-    | GetObject (Result ErrorResponse GetObjectResponse -> Msg)
-    | CreateObject (Result ErrorResponse PutObjectResponse -> Msg)
-    | CreateOrReplaceObject (Result ErrorResponse PutObjectResponse -> Msg)
+    = ObjectExists (Result S3.ErrorResponse ObjectExistsResponse -> Msg)
+    | ObjectProperties (Result S3.ErrorResponse ObjectPropertiesResponse -> Msg)
+    | GetObject (Result S3.ErrorResponse GetObjectResponse -> Msg)
+    | CreateObject (Result S3.ErrorResponse PutObjectResponse -> Msg)
+    | CreateOrReplaceObject (Result S3.ErrorResponse PutObjectResponse -> Msg)
 
 
 createRequest : S3.Config -> Request -> String -> String -> Maybe Buffer -> Cmd Msg
