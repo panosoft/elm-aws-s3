@@ -81,7 +81,7 @@ type alias Config =
 
 {-| Test for S3 object existence.
 
-From [AWS Documentation]():
+From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#headObject-property):
 
 ```
 type Msg =
@@ -98,7 +98,7 @@ objectExists config bucket key tagger =
 
 {-| Get S3 object properties.
 
-From [AWS Documentation]():
+From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#headObject-property):
 
 ```
 type Msg = ObjectPropertiesComplete (Result ErrorResponse ObjectPropertiesResponse)
@@ -114,7 +114,7 @@ objectProperties config bucket key tagger =
 
 {-| Get S3 object.
 
-From [AWS Documentation]():
+From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getObject-property):
 
 ```
 type Msg = GetObjectComplete (Result ErrorResponse GetObjectResponse)
@@ -130,7 +130,8 @@ getObject config bucket key tagger =
 
 {-| Create S3 object.
 
-From [AWS Documentation]():
+From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#headObject-property) and
+[AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property):
 
 ```
 type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
@@ -165,7 +166,7 @@ createObject config bucket key buffer tagger =
 
 {-| Create or Replace S3 object.
 
-From [AWS Documentation]():
+From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property):
 
 ```
 type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
