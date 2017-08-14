@@ -12,7 +12,7 @@ module Aws.S3.LowLevel
         , putObject
         )
 
-{-| Low-level bindings to the [AWS Simple Storage Service]() client for javascript.
+{-| Low-level bindings to the AWS Simple Storage Service client for javascript.
 
 These are useful in cases where you would like to chain tasks together and then produce a single command.
 
@@ -93,9 +93,9 @@ type alias PutObjectResponse =
 
 {-| Configuration for accessing S3.
 
-From the [AWS SDK Documentation]() and [AWS S3 Documentation]():
+From the [AWS SDK Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#constructor-property):
 
-- `region` - the region to send service requests to. See AWS.S3.region for more information.
+- `region` - the region to send service requests to.
 - `accessKeyId` - your AWS access key ID.
 - `secretAccessKey` - your AWS secret access key.
 - `serverSideEncryption` - true if Objects uploaded to S3 should be encrypted when stored, false if they should not be encrypted when stored.
