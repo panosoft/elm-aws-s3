@@ -359,7 +359,7 @@ type alias ObjectPropertiesResponse =
 * `contentLength` is the length of the S3 object
 * `contentEncoding` is the content encoding of the S3 object
 * `lastModified` is the last modified time of the S3 object
-* `deleteMarker` is True if the S3 object is versioned and the latest version has been deleted, False otherwise
+* `deleteMarker` always Nothing in current implementation
 * `versionId` is the version Id of the S3 object if it is versioned
 * `serverSideEncryption` is the encryption type of the S3 object if it is encrypted on S3
 * `storageClass` is the storageClass type of the S3 object
@@ -405,5 +405,5 @@ type alias PutObjectResponse =
 
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
-* `versionId` is the version Id S3 object it is versioned
+* `versionId` is the version Id of the S3 object if it is versioned
 * `serverSideEncryption` is the encryption type of the S3 object if it has been encrypted on S3
