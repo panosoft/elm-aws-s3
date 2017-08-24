@@ -178,7 +178,7 @@ init flags =
 
 usage : String
 usage =
-    "Usage: 'node main.js <accessKeyId> <secretAccessKey> --debug --dry-run' \n     '--debug' and '--dry-run' are optional\n"
+    "Usage: 'node main.js <accessKeyId> <secretAccessKey> --debug --dry-run' \n     '--debug' and '--dry-run' are optional.  see main.js for more details.\n"
 
 
 readFileCmd : String -> Cmd Msg
