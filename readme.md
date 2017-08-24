@@ -18,7 +18,7 @@ The installation can be done via `npm install` command.
 
 ### Test program
 
-Purpose is to test the AWS S3 API that this library supports . Use `aBuild.sh` or `build.sh` to build it and run it with `node main` command.
+Purpose is to test the AWS S3 API that this library supports . Use `aBuild.sh` or `build.sh` to build it and run it with `node main` command (see `main.js` for command line parameters).
 
 ## API
 
