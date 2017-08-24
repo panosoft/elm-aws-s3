@@ -5,6 +5,7 @@ port module App exposing (..)
 import Json.Decode
 import Task
 import Aws.S3 as S3 exposing (..)
+import DebugF exposing (..)
 import Utils.Ops exposing (..)
 import Node.Buffer as NodeBuffer exposing (Buffer)
 import Node.FileSystem as NodeFileSystem exposing (readFile, writeFile)
@@ -161,9 +162,9 @@ init flags =
         |> (\( dryrun, s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
                 (dryrun
                     ?! ( \_ ->
-                            ( Debug.log "Exiting App" "Reason: --dry-run specified"
-                            , Debug.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, downloadedFileName = downloadedFileName }
-                            , Debug.log "S3.Config" s3Config
+                            ( DebugF.log "Exiting App" "Reason: --dry-run specified"
+                            , DebugF.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, downloadedFileName = downloadedFileName }
+                            , DebugF.log "S3.Config" s3Config
                             )
                                 |> always ()
                        , always ()
@@ -208,7 +209,7 @@ update msg model =
             ReadFileComplete filename (Err error) ->
                 let
                     l =
-                        Debug.log "ReadFileComplete Error"
+                        DebugF.log "ReadFileComplete Error"
                             { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
                 in
                     update (TestsComplete <| Err error) model
@@ -216,8 +217,8 @@ update msg model =
             ReadFileComplete filename (Ok buffer) ->
                 let
                     l =
-                        ( Debug.log "ReadFileComplete" ("Filename: " ++ filename)
-                        , Debug.log "S3 Config" model.s3Config
+                        ( DebugF.log "ReadFileComplete" ("Filename: " ++ filename)
+                        , DebugF.log "S3 Config" model.s3Config
                         )
                 in
                     ({ model | readFileBuffer = Just buffer } ! [ createRequest model.s3Config (ObjectExists InitComplete) s3BucketName model.nonExistingS3KeyName Nothing ])
@@ -225,7 +226,7 @@ update msg model =
             InitComplete (Err error) ->
                 let
                     l =
-                        Debug.log "InitComplete Error"
+                        DebugF.log "InitComplete Error"
                             { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
                 in
                     update (TestsComplete <| Err <| toString error) model
@@ -233,7 +234,7 @@ update msg model =
             InitComplete (Ok response) ->
                 let
                     l =
-                        Debug.log "InitComplete"
+                        DebugF.log "InitComplete"
                             { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, exists = response.exists }
                 in
                     response.exists
@@ -244,7 +245,7 @@ update msg model =
             ObjectPropertiesExpectFail (Err error) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesExpectFail Error" error
+                        DebugF.log "ObjectPropertiesExpectFail Error" error
                 in
                     processFailError error
                         ( model, createRequest model.s3Config (GetObject GetObjectExpectFail) s3BucketName model.nonExistingS3KeyName Nothing )
@@ -252,14 +253,14 @@ update msg model =
             ObjectPropertiesExpectFail (Ok response) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesExpectFail" response
+                        DebugF.log "ObjectPropertiesExpectFail" response
                 in
                     update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model
 
             GetObjectExpectFail (Err error) ->
                 let
                     l =
-                        Debug.log "GetObjectExpectFail Error" error
+                        DebugF.log "GetObjectExpectFail Error" error
                 in
                     processFailError error <|
                         model
@@ -268,21 +269,21 @@ update msg model =
             GetObjectExpectFail (Ok response) ->
                 let
                     l =
-                        Debug.log "GetObjectExpectFail" response
+                        DebugF.log "GetObjectExpectFail" response
                 in
                     update (TestsComplete <| Err ("GetObjectExpectFail " ++ model.nonExistingS3KeyName ++ " should not exist")) model
 
             CreateObjectExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "CreateObjectExpectSucceed Error" error
+                        DebugF.log "CreateObjectExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             CreateObjectExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "CreateObjectExpectSucceed" response
+                        DebugF.log "CreateObjectExpectSucceed" response
                 in
                     ({ model | createdS3KeyName = Just response.key }
                         ! [ createRequest model.s3Config (CreateObject CreateObjectExpectFail) s3BucketName response.key model.readFileBuffer ]
@@ -291,7 +292,7 @@ update msg model =
             CreateObjectExpectFail (Err error) ->
                 let
                     l =
-                        Debug.log "CreateObjectExpectFail Error" error
+                        DebugF.log "CreateObjectExpectFail Error" error
                 in
                     error.message
                         |?> (\message ->
@@ -309,21 +310,21 @@ update msg model =
             CreateObjectExpectFail (Ok response) ->
                 let
                     l =
-                        Debug.log "CreateObjectExpectFail" response
+                        DebugF.log "CreateObjectExpectFail" response
                 in
                     update (TestsComplete <| Err ("CreateObjectExpectFail " ++ (getCreatedS3KeyName model) ++ " should not exist")) model
 
             ObjectExistsExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "ObjectExistsExpectSucceed Error" error
+                        DebugF.log "ObjectExistsExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             ObjectExistsExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "ObjectExistsExpectSucceed" response
+                        DebugF.log "ObjectExistsExpectSucceed" response
                 in
                     response.exists
                         ?! ( (\_ ->
@@ -336,14 +337,14 @@ update msg model =
             ObjectPropertiesExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesExpectSucceed Error" error
+                        DebugF.log "ObjectPropertiesExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             ObjectPropertiesExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesExpectSucceed" response
+                        DebugF.log "ObjectPropertiesExpectSucceed" response
                 in
                     model
                         ! [ createRequest model.s3Config (CreateOrReplaceObject CreateOrReplaceObjectExpectSucceed) s3BucketName (getCreatedS3KeyName model) model.readFileBuffer ]
@@ -351,14 +352,14 @@ update msg model =
             CreateOrReplaceObjectExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "CreateOrReplaceObjectExpectSucceed Error" error
+                        DebugF.log "CreateOrReplaceObjectExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             CreateOrReplaceObjectExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "CreateOrReplaceObjectSucceed" response
+                        DebugF.log "CreateOrReplaceObjectExpectSucceed" response
                 in
                     model
                         ! [ createRequest model.s3Config (CreateOrReplaceObject FinalCreateOrReplaceObjectExpectSucceed) s3BucketName model.nonExistingS3KeyNameCopy model.readFileBuffer ]
@@ -366,14 +367,14 @@ update msg model =
             FinalCreateOrReplaceObjectExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "FinalCreateOrReplaceObjectExpectSucceed Error" error
+                        DebugF.log "FinalCreateOrReplaceObjectExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             FinalCreateOrReplaceObjectExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "FinalCreateOrReplaceObjectExpectSucceed" response
+                        DebugF.log "FinalCreateOrReplaceObjectExpectSucceed" response
                 in
                     ({ model | createdS3KeyNameCopy = Just response.key }
                         ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesCopiedKeyExpectSucceed) s3BucketName response.key Nothing ]
@@ -382,28 +383,28 @@ update msg model =
             ObjectPropertiesCopiedKeyExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesCopiedKeyExpectSucceed Error" error
+                        DebugF.log "ObjectPropertiesCopiedKeyExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             ObjectPropertiesCopiedKeyExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "ObjectPropertiesCopiedKeyExpectSucceed" response
+                        DebugF.log "ObjectPropertiesCopiedKeyExpectSucceed" response
                 in
                     model ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3BucketName (getCreatedS3KeyName model) Nothing ]
 
             GetObjectExpectSucceed (Err error) ->
                 let
                     l =
-                        Debug.log "GetObjectExpectSucceed Error" error
+                        DebugF.log "GetObjectExpectSucceed Error" error
                 in
                     update (TestsComplete <| Err <| toString error) model
 
             GetObjectExpectSucceed (Ok response) ->
                 let
                     l =
-                        Debug.log "GetObjectExpectSucceed"
+                        DebugF.log "GetObjectExpectSucceed"
                             { bucket = response.bucket
                             , key = response.key
                             , contentType = response.contentType
@@ -419,7 +420,7 @@ update msg model =
                     NodeBuffer.toString NodeEncoding.Hex response.body
                         |??>
                             (\str ->
-                                Debug.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (up to 100 hex bytes): " ++ (String.left 100 str) ++ "  Buffer Length: " ++ (toString <| response.contentLength)) )
+                                DebugF.log "GetObjectExpectSucceed" ( response.bucket, response.key, ("Buffer (up to 100 hex bytes): " ++ (String.left 100 str) ++ "  Buffer Length: " ++ (toString <| response.contentLength)) )
                                     |> (\_ ->
                                             ( { model | createdS3KeyBuffer = Just response.body }
                                             , NodeFileSystem.writeFile model.downloadedFileName response.body
@@ -433,21 +434,21 @@ update msg model =
             WriteFileComplete filename (Err error) ->
                 let
                     l =
-                        Debug.log "WriteFileComplete Error" ( filename, error )
+                        DebugF.log "WriteFileComplete Error" ( filename, error )
                 in
                     update (TestsComplete <| Err error) model
 
             WriteFileComplete filename (Ok buffer) ->
                 let
                     l =
-                        Debug.log "WriteFileComplete" ("Filename: " ++ filename)
+                        DebugF.log "WriteFileComplete" ("Filename: " ++ filename)
                 in
                     update (TestsComplete <| Ok "") model
 
             TestsComplete (Err error) ->
                 let
                     l =
-                        Debug.log "Tests Completed with Error" error
+                        DebugF.log "Tests Completed with Error" error
                 in
                     model ! [ exitApp 1 ]
 
@@ -455,7 +456,7 @@ update msg model =
                 compareBuffers model
                     |??>
                         (\_ ->
-                            Debug.log "Tests Completed Successfully" ""
+                            DebugF.log "Tests Completed Successfully" ""
                                 |> always (model ! [ exitApp 0 ])
                         )
                     ??= (\error -> update (TestsComplete <| Err error) model)
