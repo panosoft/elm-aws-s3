@@ -1,5 +1,5 @@
 {
-  "name": "elm-aws-s3",
+  "name": "@panosoft/elm-aws-s3",
   "version": "1.0.0",
   "description": "Native bindings for Amazon's Simple Storage Service",
   "author": "Don Gaudino",
