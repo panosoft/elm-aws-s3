@@ -67,8 +67,8 @@ type Msg
 -}
 
 
-s3regionName : String
-s3regionName =
+s3RegionName : String
+s3RegionName =
     "us-west-1"
 
 
@@ -154,7 +154,7 @@ init flags =
                        )
             )
         |> (\( nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName ) ->
-                (config s3regionName flags.accessKeyId flags.secretAccessKey True ((flags.debug == "--debug") ? ( True, False )))
+                (config flags.accessKeyId flags.secretAccessKey True ((flags.debug == "--debug") ? ( True, False )))
                     |> (\s3Config ->
                             ( (flags.dryrun == "--dry-run") ? ( True, False ), s3Config, nonExistingS3KeyName, nonExistingS3KeyNameCopy, downloadedFileName )
                        )
@@ -163,7 +163,7 @@ init flags =
                 (dryrun
                     ?! ( \_ ->
                             ( DebugF.log "Exiting App" "Reason: --dry-run specified"
-                            , DebugF.log "Parameters" { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, downloadedFileName = downloadedFileName }
+                            , DebugF.log "Parameters" { region = s3RegionName, s3bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = nonExistingS3KeyName, nonExistingS3KeyNameCopy = nonExistingS3KeyNameCopy, downloadedFileName = downloadedFileName }
                             , DebugF.log "S3.Config" s3Config
                             )
                                 |> always ()
@@ -210,7 +210,7 @@ update msg model =
                 let
                     l =
                         DebugF.log "ReadFileComplete Error"
-                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
+                            { region = s3RegionName, bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
                 in
                     update (TestsComplete <| Err error) model
 
@@ -221,13 +221,13 @@ update msg model =
                         , DebugF.log "S3 Config" model.s3Config
                         )
                 in
-                    ({ model | readFileBuffer = Just buffer } ! [ createRequest model.s3Config (ObjectExists InitComplete) s3BucketName model.nonExistingS3KeyName Nothing ])
+                    ({ model | readFileBuffer = Just buffer } ! [ createRequest model.s3Config (ObjectExists InitComplete) s3RegionName s3BucketName model.nonExistingS3KeyName Nothing ])
 
             InitComplete (Err error) ->
                 let
                     l =
                         DebugF.log "InitComplete Error"
-                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
+                            { region = s3RegionName, bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, error = error }
                 in
                     update (TestsComplete <| Err <| toString error) model
 
@@ -235,11 +235,11 @@ update msg model =
                 let
                     l =
                         DebugF.log "InitComplete"
-                            { bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, exists = response.exists }
+                            { region = s3RegionName, bucketName = s3BucketName, existingFileName = existingFileName, nonExistingS3KeyName = model.nonExistingS3KeyName, nonExistingS3KeyNameCopy = model.nonExistingS3KeyNameCopy, downloadedFileName = model.downloadedFileName, exists = response.exists }
                 in
                     response.exists
                         ?! ( (\_ -> update (TestsComplete <| Err (model.nonExistingS3KeyName ++ " should not exist")) model)
-                           , (\_ -> model ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectFail) s3BucketName model.nonExistingS3KeyName Nothing ])
+                           , (\_ -> model ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectFail) s3RegionName s3BucketName model.nonExistingS3KeyName Nothing ])
                            )
 
             ObjectPropertiesExpectFail (Err error) ->
@@ -248,7 +248,7 @@ update msg model =
                         DebugF.log "ObjectPropertiesExpectFail Error" error
                 in
                     processFailError error
-                        ( model, createRequest model.s3Config (GetObject GetObjectExpectFail) s3BucketName model.nonExistingS3KeyName Nothing )
+                        ( model, createRequest model.s3Config (GetObject GetObjectExpectFail) s3RegionName s3BucketName model.nonExistingS3KeyName Nothing )
 
             ObjectPropertiesExpectFail (Ok response) ->
                 let
@@ -264,7 +264,7 @@ update msg model =
                 in
                     processFailError error <|
                         model
-                            ! [ createRequest model.s3Config (CreateObject CreateObjectExpectSucceed) s3BucketName model.nonExistingS3KeyName model.readFileBuffer ]
+                            ! [ createRequest model.s3Config (CreateObject CreateObjectExpectSucceed) s3RegionName s3BucketName model.nonExistingS3KeyName model.readFileBuffer ]
 
             GetObjectExpectFail (Ok response) ->
                 let
@@ -286,7 +286,7 @@ update msg model =
                         DebugF.log "CreateObjectExpectSucceed" response
                 in
                     ({ model | createdS3KeyName = Just response.key }
-                        ! [ createRequest model.s3Config (CreateObject CreateObjectExpectFail) s3BucketName response.key model.readFileBuffer ]
+                        ! [ createRequest model.s3Config (CreateObject CreateObjectExpectFail) s3RegionName s3BucketName response.key model.readFileBuffer ]
                     )
 
             CreateObjectExpectFail (Err error) ->
@@ -299,7 +299,7 @@ update msg model =
                                 (String.startsWith "createObject Overwrite Error:  Object exists (Bucket:") message
                                     ?! (( (\_ ->
                                             model
-                                                ! [ createRequest model.s3Config (ObjectExists ObjectExistsExpectSucceed) s3BucketName (getCreatedS3KeyName model) Nothing ]
+                                                ! [ createRequest model.s3Config (ObjectExists ObjectExistsExpectSucceed) s3RegionName s3BucketName (getCreatedS3KeyName model) Nothing ]
                                           )
                                         , (\_ -> update (TestsComplete <| Err <| toString error) model)
                                         )
@@ -329,7 +329,7 @@ update msg model =
                     response.exists
                         ?! ( (\_ ->
                                 model
-                                    ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectSucceed) s3BucketName (getCreatedS3KeyName model) Nothing ]
+                                    ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesExpectSucceed) s3RegionName s3BucketName (getCreatedS3KeyName model) Nothing ]
                              )
                            , (\_ -> update (TestsComplete <| Err (("ObjectExistsExpectSucceed " ++ getCreatedS3KeyName model) ++ " should exist")) model)
                            )
@@ -347,7 +347,7 @@ update msg model =
                         DebugF.log "ObjectPropertiesExpectSucceed" response
                 in
                     model
-                        ! [ createRequest model.s3Config (CreateOrReplaceObject CreateOrReplaceObjectExpectSucceed) s3BucketName (getCreatedS3KeyName model) model.readFileBuffer ]
+                        ! [ createRequest model.s3Config (CreateOrReplaceObject CreateOrReplaceObjectExpectSucceed) s3RegionName s3BucketName (getCreatedS3KeyName model) model.readFileBuffer ]
 
             CreateOrReplaceObjectExpectSucceed (Err error) ->
                 let
@@ -362,7 +362,7 @@ update msg model =
                         DebugF.log "CreateOrReplaceObjectExpectSucceed" response
                 in
                     model
-                        ! [ createRequest model.s3Config (CreateOrReplaceObject FinalCreateOrReplaceObjectExpectSucceed) s3BucketName model.nonExistingS3KeyNameCopy model.readFileBuffer ]
+                        ! [ createRequest model.s3Config (CreateOrReplaceObject FinalCreateOrReplaceObjectExpectSucceed) s3RegionName s3BucketName model.nonExistingS3KeyNameCopy model.readFileBuffer ]
 
             FinalCreateOrReplaceObjectExpectSucceed (Err error) ->
                 let
@@ -377,7 +377,7 @@ update msg model =
                         DebugF.log "FinalCreateOrReplaceObjectExpectSucceed" response
                 in
                     ({ model | createdS3KeyNameCopy = Just response.key }
-                        ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesCopiedKeyExpectSucceed) s3BucketName response.key Nothing ]
+                        ! [ createRequest model.s3Config (ObjectProperties ObjectPropertiesCopiedKeyExpectSucceed) s3RegionName s3BucketName response.key Nothing ]
                     )
 
             ObjectPropertiesCopiedKeyExpectSucceed (Err error) ->
@@ -392,7 +392,7 @@ update msg model =
                     l =
                         DebugF.log "ObjectPropertiesCopiedKeyExpectSucceed" response
                 in
-                    model ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3BucketName (getCreatedS3KeyName model) Nothing ]
+                    model ! [ createRequest model.s3Config (GetObject GetObjectExpectSucceed) s3RegionName s3BucketName (getCreatedS3KeyName model) Nothing ]
 
             GetObjectExpectSucceed (Err error) ->
                 let
@@ -405,7 +405,8 @@ update msg model =
                 let
                     l =
                         DebugF.log "GetObjectExpectSucceed"
-                            { bucket = response.bucket
+                            { region = response.region
+                            , bucket = response.bucket
                             , key = response.key
                             , contentType = response.contentType
                             , contentLength = response.contentLength
@@ -484,26 +485,26 @@ type Request
     | CreateOrReplaceObject (Result S3.ErrorResponse PutObjectResponse -> Msg)
 
 
-createRequest : S3.Config -> Request -> String -> String -> Maybe Buffer -> Cmd Msg
-createRequest s3Config requestType bucket key maybeBuffer =
+createRequest : S3.Config -> Request -> String -> String -> String -> Maybe Buffer -> Cmd Msg
+createRequest s3Config requestType region bucket key maybeBuffer =
     case requestType of
         ObjectExists tagger ->
-            S3.objectExists s3Config bucket key tagger
+            S3.objectExists s3Config region bucket key tagger
 
         ObjectProperties tagger ->
-            S3.objectProperties s3Config bucket key tagger
+            S3.objectProperties s3Config region bucket key tagger
 
         GetObject tagger ->
-            S3.getObject s3Config bucket key tagger
+            S3.getObject s3Config region bucket key tagger
 
         CreateObject tagger ->
             maybeBuffer
-                |?> (\buffer -> S3.createObject s3Config bucket key buffer tagger)
+                |?> (\buffer -> S3.createObject s3Config region bucket key buffer tagger)
                 ?!= (\_ -> Debug.crash "createObject buffer is Nothing")
 
         CreateOrReplaceObject tagger ->
             maybeBuffer
-                |?> (\buffer -> S3.createOrReplaceObject s3Config bucket key buffer tagger)
+                |?> (\buffer -> S3.createOrReplaceObject s3Config region bucket key buffer tagger)
                 ?!= (\_ -> Debug.crash "createOrReplaceObject buffer is Nothing")
 
 

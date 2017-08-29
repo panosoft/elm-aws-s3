@@ -5,18 +5,18 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 
     const apiVersion = '2006-03-01';
 
-	const createS3 = config =>
+	const createS3 = (config, region) =>
 		new S3({
 			apiVersion: apiVersion,
-			region: config.region,
+			region: region,
 			accessKeyId: config.accessKeyId,
 			secretAccessKey: config.secretAccessKey,
 			sslEnabled: true,
 			computeChecksums: true
 		});
 
-	const headObjectInternal = (config, bucket, key, cb) => {
-		const s3 = createS3(config);
+	const headObjectInternal = (config, region, bucket, key, cb) => {
+		const s3 = createS3(config, region);
 		return s3.headObject({Bucket: bucket, Key: key}, cb);
 	};
 
@@ -26,26 +26,27 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
         return pResponse;
     };
 
-    const logRequest = (debug, operation, bucket, key, body) => {
+    const logRequest = (debug, operation, region, bucket, key, body) => {
             debug
-                ? console.log('Native Request --' + operation + ' Bucket: ' + bucket + ' Key: ' + key
+                ? console.log('Native Request --' + operation + ' Region: ' + region + ' Bucket: ' + bucket + ' Key: ' + key
                     + (body ? ' Body length: ' + body.length : ''))
                 : null;
     };
 
-    const logResponse = (debug, operation, bucket, key, err, data) => {
+    const logResponse = (debug, operation, region, bucket, key, err, data) => {
         debug
             ? (err
-                ? console.log(('Native Error --' + operation + ' Bucket: ' + bucket + ' Key: ' + key), err)
-                : console.log(('Native Response --' + operation + ' Bucket: ' + bucket + ' Key: ' + key), printableResponse(data))
+                ? console.log(('Native Error --' + operation + ' Region: ' + region + ' Bucket: ' + bucket + ' Key: ' + key), err)
+                : console.log(('Native Response --' + operation + ' Region: ' + region + ' Bucket: ' + bucket + ' Key: ' + key), printableResponse(data))
                 )
             : null;
     };
 
     const createMaybe = value => value ? _elm_lang$core$Maybe$Just(value) : _elm_lang$core$Maybe$Nothing;
 
-    const createErrorResponse = (bucket, key, err) =>
+    const createErrorResponse = (region, bucket, key, err) =>
         ({
+            region: region,
             bucket: bucket,
             key: key,
             message: createMaybe(err.message),
@@ -53,36 +54,35 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
             retryable: createMaybe(err.retryable),
             statusCode: createMaybe(err.statusCode),
             time: createMaybe(err.time ? err.time.toUTCString() : err.time),
-            region: createMaybe(err.region)
         });
 
-    const objectExists = F3((config, bucket, key) =>
+    const objectExists = F4((config, region, bucket, key) =>
         nativeBinding(callback => {
             try {
                 const operation = 'objectExists';
-                logRequest(config.debug, operation, bucket, key);
-				headObjectInternal(config, bucket, key, (err, data) => {
-                    logResponse(config.debug, operation, bucket, key, err, data);
+                logRequest(config.debug, operation, region, bucket, key);
+                headObjectInternal(config, region, bucket, key, (err, data) => {
+                    logResponse(config.debug, operation, region, bucket, key, err, data);
 					callback(err
-                        ? (err.statusCode === 404 || err.code === 'NotFound' ? succeed({bucket: bucket, key: key, exists: false}) : fail(createErrorResponse(bucket, key, err)))
-                        : succeed({bucket: bucket, key: key, exists: true}));
+                        ? (err.statusCode === 404 || err.code === 'NotFound' ? succeed({region: region, bucket: bucket, key: key, exists: false}) : fail(createErrorResponse(region, bucket, key, err)))
+                        : succeed({region: region, bucket: bucket, key: key, exists: true}));
                 });
             }
             catch (error) {
-                callback(fail(createErrorResponse(bucket, key, error)));
+                callback(fail(createErrorResponse(region, bucket, key, error)));
             }
         }));
 
-    const objectProperties = F3((config, bucket, key) =>
+    const objectProperties = F4((config, region, bucket, key) =>
         nativeBinding(callback => {
             try {
                 const operation = 'objectProperties';
-                logRequest(config.debug, operation, bucket, key);
-                headObjectInternal(config, bucket, key, (err, data) => {
-                    logResponse(config.debug, operation, bucket, key, err, data);
+                logRequest(config.debug, operation, region, bucket, key);
+                headObjectInternal(config, region, bucket, key, (err, data) => {
+                    logResponse(config.debug, operation, region, bucket, key, err, data);
                     callback(err
-                        ? fail(createErrorResponse(bucket, key, err))
-                        : succeed({bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
+                        ? fail(createErrorResponse(region, bucket, key, err))
+                        : succeed({region: region, bucket: bucket, key: key, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: createMaybe(data.ContentEncoding),
                             lastModified: createMaybe(data.LastModified ? data.LastModified.toUTCString() : data.LastModified),
                             deleteMarker: createMaybe(data.DeleteMarker),
@@ -91,21 +91,21 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                 });
             }
             catch (error) {
-                callback(fail(createErrorResponse(bucket, key, error)));
+                callback(fail(createErrorResponse(region, bucket, key, error)));
             }
         }));
 
-    const getObject = F3((config, bucket, key) =>
+    const getObject = F4((config, region, bucket, key) =>
         nativeBinding(callback => {
             try {
-				const s3 = createS3(config);
+                const s3 = createS3(config, region);
                 const operation = 'getObject';
-                logRequest(config.debug, operation, bucket, key);
-				s3.getObject({Bucket: bucket, Key: key}, (err, data) => {
-                    logResponse(config.debug, operation, bucket, key, err, data);
+                logRequest(config.debug, operation, region, bucket, key);
+                s3.getObject({Bucket: bucket, Key: key}, (err, data) => {
+                    logResponse(config.debug, operation, region, bucket, key, err, data);
                     callback(err
-                        ? fail(createErrorResponse(bucket, key, err))
-                        : succeed({bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
+                        ? fail(createErrorResponse(region, bucket, key, err))
+                        : succeed({region: region, bucket: bucket, key: key, body: data.Body, contentType: data.ContentType, contentLength: data.ContentLength,
                             contentEncoding: createMaybe(data.ContentEncoding),
                             lastModified: createMaybe(data.LastModified ? data.LastModified.toUTCString() : data.LastModified),
                             deleteMarker: createMaybe(data.DeleteMarker),
@@ -115,18 +115,18 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
                 });
             }
             catch (error) {
-                callback(fail(createErrorResponse(bucket, key, error)));
+                callback(fail(createErrorResponse(region, bucket, key, error)));
             }
         }));
 
-    const putObject = F4((config, bucket, key, body) =>
+    const putObject = F5((config, region, bucket, key, body) =>
         nativeBinding(callback => {
             try {
-				const s3 = createS3(config);
+                const s3 = createS3(config, region);
                 const operation = 'putObject';
-                logRequest(config.debug, operation, bucket, key, body);
-				const params = {Bucket: bucket, Key: key, Body: body};
-				const contentType = mime.lookup(key);
+                logRequest(config.debug, operation, region, bucket, key, body);
+                const params = {Bucket: bucket, Key: key, Body: body};
+                const contentType = mime.lookup(key);
      	       	if (contentType) {
 					params.ContentType = contentType;
 				}
@@ -135,15 +135,15 @@ var _panosoft$elm_aws_s3$Native_S3 = function() {
 				}
 
             	s3.putObject(params, (err, data) => {
-                    logResponse(config.debug, operation, bucket, key, err, data);
+                    logResponse(config.debug, operation, region, bucket, key, err, data);
                     callback(err
-                        ? fail(createErrorResponse(bucket, key, err))
-                        : succeed({bucket: bucket, key: key, versionId: createMaybe(data.VersionId), serverSideEncryption: data.ServerSideEncryption})
+                        ? fail(createErrorResponse(region, bucket, key, err))
+                        : succeed({region: region, bucket: bucket, key: key, versionId: createMaybe(data.VersionId), serverSideEncryption: data.ServerSideEncryption})
                     );
                 });
             }
             catch (error) {
-                callback(fail(createErrorResponse(bucket, key, error)));
+                callback(fail(createErrorResponse(region, bucket, key, error)));
             }
         }));
 

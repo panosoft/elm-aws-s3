@@ -28,21 +28,22 @@ import Node.Buffer as Buffer exposing (..)
 {-| ErrorResponse
 -}
 type alias ErrorResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , message : Maybe String
     , code : Maybe String
     , retryable : Maybe Bool
     , statusCode : Maybe Int
     , time : Maybe String
-    , region : Maybe String
     }
 
 
 {-| ObjectExistsResponse
 -}
 type alias ObjectExistsResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , exists : Bool
     }
@@ -51,7 +52,8 @@ type alias ObjectExistsResponse =
 {-| ObjectPropertiesResponse
 -}
 type alias ObjectPropertiesResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , contentType : String
     , contentLength : Int
@@ -67,7 +69,8 @@ type alias ObjectPropertiesResponse =
 {-| GetObjectResponse
 -}
 type alias GetObjectResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , body : Buffer
     , contentType : String
@@ -84,7 +87,8 @@ type alias GetObjectResponse =
 {-| PutObjectResponse
 -}
 type alias PutObjectResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , versionId : Maybe String
     , serverSideEncryption : String
@@ -95,15 +99,13 @@ type alias PutObjectResponse =
 
 From the [AWS SDK Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#constructor-property):
 
-- `region` - the region to send service requests to.
 - `accessKeyId` - your AWS access key ID.
 - `secretAccessKey` - your AWS secret access key.
 - `serverSideEncryption` - true if Objects uploaded to S3 should be encrypted when stored, false if they should not be encrypted when stored.
 - `debug` - log debug information if true.
 -}
 type alias Config =
-    { region : String
-    , accessKeyId : String
+    { accessKeyId : String
     , secretAccessKey : String
     , serverSideEncryption : Bool
     , debug : Bool
@@ -116,10 +118,10 @@ type alias Config =
 type Msg = ObjectExistsComplete (Result ErrorResponse ObjectExistsResponse)
 
 
-objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
+objectExists config "<region>" "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> Task ErrorResponse ObjectExistsResponse
+objectExists : Config -> String -> String -> String -> Task ErrorResponse ObjectExistsResponse
 objectExists =
     Native.S3.objectExists
 
@@ -129,10 +131,10 @@ objectExists =
 type Msg = ObjectPropertiesComplete (Result ErrorResponse ObjectPropertiesResponse)
 
 
-objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
+objectProperties config "<region>" "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
-objectProperties : Config -> String -> String -> Task ErrorResponse ObjectPropertiesResponse
+objectProperties : Config -> String -> String -> String -> Task ErrorResponse ObjectPropertiesResponse
 objectProperties =
     Native.S3.objectProperties
 
@@ -142,10 +144,10 @@ objectProperties =
 type Msg = GetObjectComplete (Result ErrorResponse GetObjectResponse)
 
 
-getObject config "<bucket name>" "<object name>" GetObjectComplete
+getObject config "<region>" "<bucket name>" "<object name>" GetObjectComplete
 ```
 -}
-getObject : Config -> String -> String -> Task ErrorResponse GetObjectResponse
+getObject : Config -> String -> String -> String -> Task ErrorResponse GetObjectResponse
 getObject =
     Native.S3.getObject
 
@@ -155,9 +157,9 @@ getObject =
 type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
 
-putObject config "<bucket name>" "<object name>" "<object buffer>" PutObjectComplete
+putObject config "<region>" "<bucket name>" "<object name>" "<object buffer>" PutObjectComplete
 ```
 -}
-putObject : Config -> String -> String -> Buffer -> Task ErrorResponse PutObjectResponse
+putObject : Config -> String -> String -> String -> Buffer -> Task ErrorResponse PutObjectResponse
 putObject =
     Native.S3.putObject

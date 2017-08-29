@@ -28,15 +28,13 @@ __Config__
 
 ```elm
 type alias Config =
-    { region : String
-    , accessKeyId : String
+    { accessKeyId : String
     , secretAccessKey : String
     , serverSideEncryption : Bool
     , debug : Bool
     }
 ```
 
-* `region` is the AWS region containing the S3 buckets being accessed or modified
 * `accessKeyId` is your AWS accessKeyId
 * `secretAccessKey` is your AWS secretAccessKey
 * `serverSideEncryption` is `True` if created S3 objects should be encrypted on S3, `False` if encryption is not desired
@@ -48,8 +46,7 @@ __Usage__
 ```elm
 config : Config
 config =
-    { region = "<AWS region containing buckets>"
-    , accessKeyId = "<your AWS accessKeyId>"
+    { accessKeyId = "<your AWS accessKeyId>"
     , secretAccessKey = "<your AWS secretAccessKey>"
     , serverSideEncryption = True
     , debug = False
@@ -64,16 +61,17 @@ Check an S3 bucket for the existence of an S3 object using S3 SDK function [head
 
 
 ```elm
-objectExists : Config -> String -> String -> ObjectExistsCompleteTagger -> Cmd msg
-objectExists config bucket key tagger =
+objectExists : Config -> String -> String -> String -> (Result ErrorResponse ObjectExistsResponse -> msg) -> Cmd msg
+objectExists config region bucket key tagger =
 ```
 __Usage__
 
 ```elm
-objectExists config bucket key ObjectExistsComplete
+objectExists config region bucket key ObjectExistsComplete
 ```
 * `ObjectExistsComplete` is your application's message to handle the different result scenarios
 * `config` has fields used to configure S3 for the request
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket that may contain the S3 object
 * `key` is the name of the S3 object being checked
 
@@ -82,16 +80,17 @@ objectExists config bucket key ObjectExistsComplete
 Get the properties of an S3 object in an S3 bucket using S3 SDK function [headObject](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#headObject-property). Some properties may not be defined for an S3 object.
 
 ```elm
-objectProperties : Config -> String -> String -> ObjectPropertiesCompleteTagger -> Cmd msg
-objectProperties config bucket key tagger =
+objectProperties : Config -> String -> String -> String -> (Result ErrorResponse ObjectPropertiesResponse -> msg) -> Cmd msg
+objectProperties config region bucket key tagger =
 ```
 __Usage__
 
 ```elm
-objectProperties config bucket key ObjectPropertiesComplete
+objectProperties config region bucket key ObjectPropertiesComplete
 ```
 * `ObjectPropertiesComplete` is your application's message to handle the different result scenarios
 * `config` has fields used to configure S3 for the request
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket that may contain the S3 object
 * `key` is the name of the S3 object whose properties are being retrieved
 
@@ -100,16 +99,17 @@ objectProperties config bucket key ObjectPropertiesComplete
 Retrieve an S3 object and its properties from an S3 bucket using S3 SDK function [getObject](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getObject-property).
 
 ```elm
-getObject : Config -> String -> String -> GetObjectCompleteTagger -> Cmd msg
-getObject config bucket key tagger =
+getObject : Config -> String -> String -> String -> (Result ErrorResponse GetObjectResponse -> msg) -> Cmd msg
+getObject config region bucket key tagger =
 ```
 __Usage__
 
 ```elm
-getObject config bucket key GetObjectComplete
+getObject config region bucket key GetObjectComplete
 ```
 * `GetObjectComplete` is your application's message to handle the different result scenarios
 * `config` has fields used to configure S3 for the request
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket that may contain the S3 object
 * `key` is the name of the S3 object being retrieved
 
@@ -118,16 +118,17 @@ getObject config bucket key GetObjectComplete
 Create an S3 object in an S3 bucket. This will cause an error if the S3 object already exists. This function uses `Buffer` defined in [elm-node/core](https://github.com/elm-node/core), and S3 SDK functions [headObject](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#headObject-property), and [putObject](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property).
 
 ```elm
-createObject : Config -> String -> String -> Buffer -> CreateObjectCompleteTagger -> Cmd msg
-createObject config bucket key body tagger =
+createObject : Config -> String -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
+createObject config region bucket key buffer tagger =
 ```
 __Usage__
 
 ```elm
-createObject config bucket key body CreatObjectComplete
+createObject config region bucket key body CreatObjectComplete
 ```
 * `CreateObjectComplete` is your application's message to handle the different result scenarios
 * `config` has fields used to configure S3 for the request
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket that may contain the S3 object
 * `key` is the name of the S3 object being created
 * `body` is a buffer containing the contents of S3 object being created
@@ -137,16 +138,17 @@ createObject config bucket key body CreatObjectComplete
 Create an S3 object in an S3 bucket, or replace an S3 object in an S3 bucket if the S3 object already exists. This function uses `Buffer` defined in [elm-node/core](https://github.com/elm-node/core), and S3 SDK function [putObject](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property).
 
 ```elm
-createOrReplaceObject : Config -> String -> String -> Buffer -> CreateOrReplaceObjectCompleteTagger -> Cmd msg
-createOrReplaceObject config bucket key body tagger =
+createOrReplaceObject : Config -> String -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
+createOrReplaceObject config region bucket key buffer tagger =
 ```
 __Usage__
 
 ```elm
-createOrReplaceObject config bucket key body CreateOrReplaceObjectComplete
+createOrReplaceObject config region bucket key body CreateOrReplaceObjectComplete
 ```
 * `CreateOrReplaceObjectComplete` is your application's message to handle the different result scenarios
 * `config` has fields used to configure S3 for the request
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket that may contain the S3 object
 * `key` is the name of the S3 object being created or replaced
 * `body` is a buffer containing the contents of S3 object being created or replaced
@@ -298,17 +300,18 @@ Error returned from all S3 operations.
 
 ```elm
 type alias ErrorResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , message : Maybe String
     , code : Maybe String
     , retryable : Maybe Bool
     , statusCode : Maybe Int
     , time : Maybe String
-    , region : Maybe String
     }
 ```
 
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
 * `message` is the error message
@@ -316,7 +319,6 @@ type alias ErrorResponse =
 * `retryable` indicates if the AWS operation is retryable
 * `statusCode` is the HTTP code
 * `time` is the time the error occurred
-* `region` is the AWS region used in the operation
 
 #### ObjectExistsResponse
 
@@ -324,12 +326,14 @@ Successful return from `objectExists` operation.
 
 ```elm
 type alias ObjectExistsResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , exists : Bool
     }
 ```
 
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
 * `exists` is True if the S3 object exists in the S3 bucket and False otherwise
@@ -340,7 +344,8 @@ Successful return from `objectProperties` operation.
 
 ```elm
 type alias ObjectPropertiesResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , contentType : String
     , contentLength : Int
@@ -353,6 +358,7 @@ type alias ObjectPropertiesResponse =
     }
 ```
 
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
 * `contentType` is the content type of the S3 object
@@ -370,7 +376,8 @@ Successful return from `getObject` operation.
 
 ```elm
 type alias GetObjectResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , body : Buffer
     , contentType : String
@@ -384,6 +391,7 @@ type alias GetObjectResponse =
     }
 ```
 
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
 * `body` is buffer containing the contents of the S3 object
@@ -396,13 +404,15 @@ Successful return from `createObject` or `createOrReplaceObject` operations.
 
 ```elm
 type alias PutObjectResponse =
-    { bucket : String
+    { region : String
+    , bucket : String
     , key : String
     , versionId : Maybe String
     , serverSideEncryption : String
     }
 ```
 
+* `region` is the AWS region containing the S3 bucket being accessed
 * `bucket` is the name of the S3 bucket used in the operation
 * `key` is the name of the S3 object used in the operation
 * `versionId` is the version Id of the S3 object if it is versioned

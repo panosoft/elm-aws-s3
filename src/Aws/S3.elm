@@ -60,7 +60,6 @@ type alias PutObjectResponse =
 
 ```
 config = S3.config
-    "AWS_REGION"
     "ACCESS_KEY_ID"
     "SECRET_ACCESS_KEY"
     serverSideEncryption
@@ -68,7 +67,7 @@ config = S3.config
 
 ```
 -}
-config : String -> String -> String -> Bool -> Bool -> Config
+config : String -> String -> Bool -> Bool -> Config
 config =
     Config
 
@@ -87,13 +86,13 @@ From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/
 type Msg =
     ObjectExistsComplete (Result ErrorResponse ObjectExistsResponse)
 
-objectExists config "<bucket name>" "<object name>" ObjectExistsComplete
+objectExists config "<region>" "<bucket name>" "<object name>" ObjectExistsComplete
 ```
 -}
-objectExists : Config -> String -> String -> (Result ErrorResponse ObjectExistsResponse -> msg) -> Cmd msg
-objectExists config bucket key tagger =
-    log config bucket key "objectExists"
-        |> always (LowLevel.objectExists config bucket key |> Task.attempt tagger)
+objectExists : Config -> String -> String -> String -> (Result ErrorResponse ObjectExistsResponse -> msg) -> Cmd msg
+objectExists config region bucket key tagger =
+    log config region bucket key "objectExists"
+        |> always (LowLevel.objectExists config region bucket key |> Task.attempt tagger)
 
 
 {-| Get S3 object properties.
@@ -103,13 +102,13 @@ From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/
 ```
 type Msg = ObjectPropertiesComplete (Result ErrorResponse ObjectPropertiesResponse)
 
-objectProperties config "<bucket name>" "<object name>" ObjectPropertiesComplete
+objectProperties config "<region>" "<bucket name>" "<object name>" ObjectPropertiesComplete
 ```
 -}
-objectProperties : Config -> String -> String -> (Result ErrorResponse ObjectPropertiesResponse -> msg) -> Cmd msg
-objectProperties config bucket key tagger =
-    log config bucket key "objectProperties"
-        |> always (LowLevel.objectProperties config bucket key |> Task.attempt tagger)
+objectProperties : Config -> String -> String -> String -> (Result ErrorResponse ObjectPropertiesResponse -> msg) -> Cmd msg
+objectProperties config region bucket key tagger =
+    log config region bucket key "objectProperties"
+        |> always (LowLevel.objectProperties config region bucket key |> Task.attempt tagger)
 
 
 {-| Get S3 object.
@@ -119,13 +118,13 @@ From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/
 ```
 type Msg = GetObjectComplete (Result ErrorResponse GetObjectResponse)
 
-getObject config "<bucket name>" "<object name>" GetObjectComplete
+getObject config "<region>" "<bucket name>" "<object name>" GetObjectComplete
 ```
 -}
-getObject : Config -> String -> String -> (Result ErrorResponse GetObjectResponse -> msg) -> Cmd msg
-getObject config bucket key tagger =
-    log config bucket key "getObject"
-        |> always (LowLevel.getObject config bucket key |> Task.attempt tagger)
+getObject : Config -> String -> String -> String -> (Result ErrorResponse GetObjectResponse -> msg) -> Cmd msg
+getObject config region bucket key tagger =
+    log config region bucket key "getObject"
+        |> always (LowLevel.getObject config region bucket key |> Task.attempt tagger)
 
 
 {-| Create S3 object.
@@ -136,28 +135,28 @@ From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/
 ```
 type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
-createObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
+createObject config "<region>" "<bucket name>" "<object name>" <object buffer> PutObjectComplete
 ```
 -}
-createObject : Config -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
-createObject config bucket key buffer tagger =
-    log config bucket key "createObject"
+createObject : Config -> String -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
+createObject config region bucket key buffer tagger =
+    log config region bucket key "createObject"
         |> always
-            (LowLevel.objectExists config bucket key
+            (LowLevel.objectExists config region bucket key
                 |> Task.andThen
                     (\response ->
                         response.exists
                             ? ( Task.fail
-                                    { bucket = bucket
+                                    { region = region
+                                    , bucket = bucket
                                     , key = key
                                     , message = Just ("createObject Overwrite Error:  Object exists (Bucket: " ++ response.bucket ++ " Object Key: " ++ response.key ++ ")")
                                     , code = Nothing
                                     , retryable = Nothing
                                     , statusCode = Nothing
                                     , time = Nothing
-                                    , region = Nothing
                                     }
-                              , LowLevel.putObject config bucket key buffer
+                              , LowLevel.putObject config region bucket key buffer
                               )
                     )
                 |> Task.attempt tagger
@@ -171,16 +170,16 @@ From [AWS Documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/
 ```
 type Msg = PutObjectComplete (Result ErrorResponse PutObjectResponse)
 
-createOrReplaceObject config "<bucket name>" "<object name>" <object buffer> PutObjectComplete
+createOrReplaceObject config "<region>" "<bucket name>" "<object name>" <object buffer> PutObjectComplete
 ```
 -}
-createOrReplaceObject : Config -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
-createOrReplaceObject config bucket key buffer tagger =
-    log config bucket key "createOrReplaceObject"
-        |> always (LowLevel.putObject config bucket key buffer)
+createOrReplaceObject : Config -> String -> String -> String -> Buffer -> (Result ErrorResponse PutObjectResponse -> msg) -> Cmd msg
+createOrReplaceObject config region bucket key buffer tagger =
+    log config region bucket key "createOrReplaceObject"
+        |> always (LowLevel.putObject config region bucket key buffer)
         |> Task.attempt tagger
 
 
-log : Config -> String -> String -> String -> String
-log config bucket key operation =
-    config.debug ?! ( (\_ -> Debug.log "S3 --" ("Performing " ++ operation ++ " for Bucket: " ++ bucket ++ "  Key: " ++ key)), always "" )
+log : Config -> String -> String -> String -> String -> String
+log config region bucket key operation =
+    config.debug ?! ( (\_ -> Debug.log "S3 --" ("Performing " ++ operation ++ " for Region: " ++ region ++ "   Bucket: " ++ bucket ++ "  Key: " ++ key)), always "" )
