@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0",
+    "version": "2.0.1",
     "summary": "Native bindings for Amazon's Simple Storage Service",
     "repository": "https://github.com/panosoft/elm-aws-s3.git",
     "license": "Unlicense",
